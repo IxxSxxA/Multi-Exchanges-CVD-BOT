@@ -1,161 +1,121 @@
-const fs = require('fs');
-const path = require('path');
-const WebSocket = require('ws');
-const { aggregateData } = require('./dataAggregator');
-const config = require('./config');
+// src/main.js
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import config from './config.js';
+import { dataAggregator } from './dataAggregator.js';
 
-// Carica dinamicamente tutti gli exchange dalla cartella exchanges
-const exchanges = {};
-const exchangeFiles = fs.readdirSync(path.join(__dirname, '../exchanges'));
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-exchangeFiles.forEach(file => {
-    if (file.endsWith('.js')) {
-        const exchangeName = file.replace('.js', '');
-        exchanges[exchangeName] = require(`../exchanges/${file}`);
-    }
+console.log('[MAIN] Starting Multi-Exchanges-CVD-BOT with ES Modules');
+console.log('[MAIN] Configuration:', {
+    pair: config.pair,
+    marketType: config.marketType,
+    candleInterval: config.candleInterval
 });
 
-class CVDBot {
+class Main {
     constructor() {
-        this.candles = {};
-        this.websockets = {};
-        this.initializeTimeframes();
+        this.exchanges = {};
+        this.initFilesystem();
+        this.loadExchanges();
     }
 
-    initializeTimeframes() {
-        // Inizializza la struttura dati per i timeframe
-        config.timeframes.forEach(tf => {
-            this.candles[tf] = {
+    async initFilesystem() {
+        try {
+            // Ensure directories exist
+            await this.ensureDirectory(config.dataPaths.candles);
+            await this.ensureDirectory(config.dataPaths.logs);
+            
+            // Clean directories
+            await this.cleanDirectory(config.dataPaths.candles);
+            await this.cleanDirectory(config.dataPaths.logs);
+            
+            // Initialize fresh files
+            await this.initializeCandleFile(`candles_${config.candleInterval}.json`, '[]');
+            await this.initializeCandleFile('current_candle.json', JSON.stringify({
                 open: 0,
                 high: 0,
                 low: 0,
                 close: 0,
                 vBuy: 0,
                 vSell: 0,
-                timestamp: null
-            };
-        });
-    }
-
-    async start() {
-        console.log('Starting CVD Bot...');
-        
-        // Connetti a tutti gli exchange configurati
-        for (const [exchangeName, exchangeModule] of Object.entries(exchanges)) {
-            if (config.exchanges[exchangeName] && config.exchanges[exchangeName].enabled) {
-                console.log(`Connecting to ${exchangeName}...`);
-                await this.connectToExchange(exchangeName, exchangeModule);
-            }
+                timestamp: Date.now()
+            }));
+            
+            console.log('[MAIN] Filesystem initialized successfully');
+        } catch (err) {
+            console.error('[MAIN] Filesystem initialization error:', err);
+            process.exit(1);
         }
     }
 
-    async connectToExchange(exchangeName, exchangeModule) {
+    async ensureDirectory(dirPath) {
         try {
-            const ws = new WebSocket(exchangeModule.getWebSocketUrl());
-            this.websockets[exchangeName] = ws;
+            await fs.promises.mkdir(dirPath, { recursive: true });
+            console.log(`[MAIN] Directory ensured: ${dirPath}`);
+        } catch (err) {
+            if (err.code !== 'EEXIST') throw err;
+        }
+    }
 
-            ws.on('open', () => {
-                console.log(`Connected to ${exchangeName} WebSocket`);
-                ws.send(exchangeModule.subscribeToTrades());
-            });
+    async cleanDirectory(dirPath) {
+        try {
+            const files = await fs.promises.readdir(dirPath);
+            const deletePromises = files.map(file => 
+                fs.promises.unlink(path.join(dirPath, file))
+            );
+            await Promise.all(deletePromises);
+            console.log(`[MAIN] Cleaned directory: ${dirPath} (${files.length} files removed)`);
+        } catch (err) {
+            if (err.code !== 'ENOENT') throw err;
+        }
+    }
 
-            ws.on('message', (data) => {
-                const trade = exchangeModule.parseTradeData(data);
-                if (trade) {
-                    this.processTrade(trade, exchangeName);
+    async initializeCandleFile(filename, defaultContent) {
+        const filePath = path.join(config.dataPaths.candles, filename);
+        await fs.promises.writeFile(filePath, defaultContent);
+        console.log(`[MAIN] Initialized ${filename} with fresh data`);
+    }
+
+    async loadExchanges() {
+        const exchangesDir = config.dataPaths.exchanges;
+        
+        try {
+            const exchangeFiles = (await fs.promises.readdir(exchangesDir))
+                .filter(file => file.endsWith('.js'));
+            
+            if (exchangeFiles.length === 0) {
+                console.warn('[MAIN] No exchange implementations found in exchanges/ directory');
+                return;
+            }
+
+            console.log(`[MAIN] Found ${exchangeFiles.length} exchange files`);
+            
+            for (const file of exchangeFiles) {
+                const exchangeName = file.replace('.js', '');
+                if (config.exchanges[exchangeName]?.enabled) {
+                    try {
+                        console.log(`[MAIN] Loading exchange ${exchangeName}...`);
+                        const module = await import(path.join(exchangesDir, file));
+                        const ExchangeClass = module.default;
+                        this.exchanges[exchangeName] = new ExchangeClass(
+                            config.pair,
+                            config.marketType,
+                            (exchange, trade) => {
+                                console.log(`[MAIN] Received trade from ${exchange}`);
+                                dataAggregator.processTrade(exchange, trade);
+                            }
+                        );
+                    } catch (err) {
+                        console.error(`[MAIN] Error loading exchange ${exchangeName}:`, err);
+                    }
                 }
-            });
-
-            ws.on('error', (err) => {
-                console.error(`${exchangeName} WebSocket error:`, err);
-            });
-
-            ws.on('close', () => {
-                console.log(`${exchangeName} WebSocket disconnected. Reconnecting...`);
-                setTimeout(() => this.connectToExchange(exchangeName, exchangeModule), 5000);
-            });
-
+            }
         } catch (err) {
-            console.error(`Error connecting to ${exchangeName}:`, err);
+            console.error('[MAIN] Error reading exchanges directory:', err);
         }
-    }
-
-    processTrade(trade, exchangeName) {
-        // Aggiorna i dati delle candele per ogni timeframe
-        config.timeframes.forEach(tf => {
-            this.updateCandleData(trade, tf, exchangeName);
-        });
-    }
-
-    updateCandleData(trade, timeframe, exchangeName) {
-        const now = Math.floor(Date.now() / 1000);
-        const candleTime = Math.floor(now / (timeframe * 60)) * timeframe * 60;
-        
-        if (!this.candles[timeframe].timestamp || this.candles[timeframe].timestamp < candleTime) {
-            // Nuova candela
-            if (this.candles[timeframe].timestamp) {
-                // Salva la candela completata
-                this.saveCandle(timeframe);
-            }
-            
-            // Inizializza nuova candela
-            this.candles[timeframe] = {
-                open: trade.price,
-                high: trade.price,
-                low: trade.price,
-                close: trade.price,
-                vBuy: trade.side === 'buy' ? trade.volume : 0,
-                vSell: trade.side === 'sell' ? trade.volume : 0,
-                timestamp: candleTime,
-                exchanges: { [exchangeName]: true }
-            };
-        } else {
-            // Aggiorna candela esistente
-            const candle = this.candles[timeframe];
-            candle.high = Math.max(candle.high, trade.price);
-            candle.low = Math.min(candle.low, trade.price);
-            candle.close = trade.price;
-            
-            if (trade.side === 'buy') {
-                candle.vBuy += trade.volume;
-            } else {
-                candle.vSell += trade.volume;
-            }
-            
-            candle.exchanges[exchangeName] = true;
-        }
-    }
-
-    saveCandle(timeframe) {
-        const candle = this.candles[timeframe];
-        const fileName = `candles_${timeframe}m.json`;
-        const filePath = path.join(__dirname, '../data', fileName);
-        
-        // Calcola CVD
-        candle.cvd = candle.vBuy - candle.vSell;
-        
-        // Leggi i dati esistenti o inizializza un nuovo array
-        let existingData = [];
-        try {
-            existingData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-        } catch (err) {
-            if (err.code !== 'ENOENT') {
-                console.error(`Error reading ${fileName}:`, err);
-            }
-        }
-        
-        // Aggiungi la nuova candela e mantieni solo le ultime N candele
-        existingData.push(candle);
-        if (existingData.length > config.maxCandlesToStore) {
-            existingData = existingData.slice(-config.maxCandlesToStore);
-        }
-        
-        // Salva il file
-        fs.writeFileSync(filePath, JSON.stringify(existingData, null, 2));
-        console.log(`Saved ${timeframe}m candle at ${new Date(candle.timestamp * 1000).toISOString()}`);
     }
 }
 
-// Avvia il bot
-const bot = new CVDBot();
-bot.start();
+new Main();

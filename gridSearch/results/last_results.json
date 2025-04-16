@@ -1,0 +1,19 @@
+{
+  "timestamp": 1744808400000,
+  "trades": [],
+  "summary": {
+    "initialCapital": 10000,
+    "finalCapital": 10000,
+    "totalPnL": 0,
+    "pnlPercent": 0,
+    "totalTrades": 0,
+    "winningTrades": 0,
+    "losingTrades": 0,
+    "winRate": 0,
+    "avgWin": 0,
+    "avgLoss": 0,
+    "profitFactor": null,
+    "maxConsecutiveWins": 0,
+    "maxConsecutiveLosses": 0
+  }
+}

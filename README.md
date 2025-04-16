@@ -1,9 +1,9 @@
 # Multi-Exchanges-CVD-BOT
 Multi-Exchanges-CVD-BOT//
-├── data/                   # Cartella per CSV JSON 
+├── candles/                   # Cartella per CSV JSON 
 │   ├── candles_YYm.json    # Dati candele aggregate // Un file per ogni TF -> candles_1m candles_5m ecc ..
 │   ├── candles_XXm.json    # Dati candele aggregate // Un file per ogni TF -> candles_1m candles_5m ecc ..
-│   └── last_aggregated_trade.json  # dati candela live per plot nella chart in stily tradingview
+│   └── current_candle.json # dati candela live per plot nella chart in stily tradingview
 ├── indicators/             # Cartella indicatori // Nessuno creato -> Tutto in cvdStrategy
 │   ├── atr.js              # indicatore atr
 │   ├── cvd.js              # indicatore cvd
