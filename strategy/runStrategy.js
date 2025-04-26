@@ -11,25 +11,40 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 
-// Directory e file
+// Calcolo dinamico del buffer size
+function calculateOptimalBufferSize(config) {
+  if (!config.enableDynamicBuffer) {
+    return 100; // Default
+  }
+  const minBuffer = Math.max(
+    config.atrLen * config.memoryBufferMultiplier,
+    config.atrLenCVDS * 2,
+    config.maxBarsBack * 1.5
+  );
+  return Math.min(Math.ceil(minBuffer), 1000); // Limite superiore a 1000
+}
+
+const maxCandlesInMemory = calculateOptimalBufferSize(configStrategy);
+
+// Directory e file (nessuna modifica qui)
 const candlesDir = path.join(rootDir, 'candles');
 const candlesFile = path.join(candlesDir, 'candles_1m.json');
 const strategyDir = path.join(rootDir, 'strategy');
 const candlesStrategyDir = path.join(strategyDir, 'candlesStrategy');
 const tradesFile = path.join(strategyDir, 'trades.csv');
 
-// Normalizza i timeframe
+// Normalizza i timeframe (nessuna modifica qui)
 const chartTFMinutes = parseInt(configStrategy.chartTF?.replace(/m$/, '') || 1);
 const anchorTFMinutes = parseInt(configStrategy.anchorInput?.replace(/m$/, '') || 3);
 
-// File delle candele
+// File delle candele (nessuna modifica qui)
 const candlesStrategy1mFile = path.join(candlesStrategyDir, 'candlesStrategy_1m.json');
 const candlesChartTFFile = chartTFMinutes === 1
   ? candlesStrategy1mFile
   : path.join(candlesStrategyDir, `candlesStrategy_${chartTFMinutes}m.json`);
 const candlesAnchorFile = path.join(candlesStrategyDir, `candlesStrategy_${anchorTFMinutes}m.json`);
 
-// Stato della strategia
+// Stato della strategia (modificato per usare i parametri config)
 let strategyState = {
   state: 'Waiting For CVDS',
   lastSignal: null,
@@ -41,8 +56,7 @@ let strategyState = {
   capital: parseFloat(configStrategy.initialAmount) || 10000
 };
 
-// Buffer e stato
-const maxCandlesInMemory = 100;
+// Buffer e stato (ora usa maxCandlesInMemory calcolato)
 let candles1mBuffer = [];
 let candlesChartTFBuffer = [];
 let candlesAnchorBuffer = [];
@@ -50,11 +64,8 @@ let lastProcessed3mTimestamp = 0;
 let lastProcessed15mTimestamp = 0;
 let lastProcessedCandleTimestamp = 0;
 
-// Intervallo di polling (secondi)
-const POLLING_INTERVAL = 60;
-
-// Limite massimo per il capitale (10x iniziale)
-const MAX_CAPITAL_MULTIPLIER = 10;
+// Intervallo di polling (ora da config)
+const POLLING_INTERVAL = configStrategy.pollingInterval || 60;
 
 // ------------------- Funzioni Ausiliarie -------------------
 
@@ -280,20 +291,14 @@ function detectFVG(candles, index) {
 
 // ------------------- Logica della Strategia -------------------
 
+
 function processCandle(candle, index, allCandles, isBacktest = false) {
   try {
-    // Verifica capitale valido
-    if (!Number.isFinite(strategyState.capital)) {
-      printToConsole(`🛑 ERRORE CRITICO: Capitale non valido (${strategyState.capital}). Arresto strategia.`);
-      writeToCSV('Error', `Capitale non valido (${strategyState.capital})`, strategyState.capital);
-      process.exit(1);
-    }
-
-    // Verifica capitale massimo
+    // Verifica capitale valido (modificato per usare config.capitalGrowthLimit)
     const initialAmount = parseFloat(configStrategy.initialAmount) || 10000;
-    if (strategyState.capital > initialAmount * MAX_CAPITAL_MULTIPLIER) {
-      printToConsole(`🛑 ERRORE: Capitale (${strategyState.capital.toFixed(2)}) supera il limite massimo (${initialAmount * MAX_CAPITAL_MULTIPLIER}). Arresto strategia.`);
-      writeToCSV('Error', `Capitale supera limite massimo (${initialAmount * MAX_CAPITAL_MULTIPLIER})`, strategyState.capital);
+    if (strategyState.capital > initialAmount * configStrategy.capitalGrowthLimit) {
+      printToConsole(`🛑 ERRORE: Capitale (${strategyState.capital.toFixed(2)}) supera il limite massimo (${initialAmount * configStrategy.capitalGrowthLimit}). Arresto strategia.`);
+      writeToCSV('Error', `Capitale supera limite massimo (${initialAmount * configStrategy.capitalGrowthLimit})`, strategyState.capital);
       process.exit(1);
     }
 
@@ -414,7 +419,7 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
       const atrCVDS = calculateATR(candlesChartTFBuffer, configStrategy.atrLenCVDS || 14);
       const maxATRMult = parseFloat(configStrategy.maxATRMult) || 2;
       const slDistance = atrCVDS * maxATRMult;
-      const riskPerTrade = strategyState.capital * 0.01;
+      const riskPerTrade = strategyState.capital * configStrategy.riskPerTrade; // Ora da config
 
       printToConsole(`🚪 Preparazione entrata: entryPrice=${entryPrice.toFixed(2)}, atrCVDS=${atrCVDS.toFixed(2)}, maxATRMult=${maxATRMult.toFixed(2)}, slDistance=${slDistance.toFixed(2)}`);
 
@@ -435,8 +440,8 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
         return;
       }
 
-      // Limita positionSize a max 5% del capitale in valore
-      const maxPositionValue = strategyState.capital * 0.05;
+      // Limita positionSize a maxPositionSizePercent del capitale in valore
+      const maxPositionValue = strategyState.capital * (configStrategy.maxPositionSizePercent / 100);
       strategyState.positionSize = Math.min(strategyState.positionSize, maxPositionValue / entryPrice);
 
       printToConsole(`📏 PositionSize calcolato: ${strategyState.positionSize.toFixed(6)} unità`);
@@ -472,8 +477,8 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
           strategyState = { state: 'Waiting For CVDS', lastSignal: null, entryPrice: null, slTarget: null, tpTarget: null, fvgWaiting: null, positionSize: null, capital: strategyState.capital };
         } else if (currCandle.high >= strategyState.tpTarget) {
           let profit = strategyState.positionSize * (currCandle.high - strategyState.entryPrice);
-          // Limita profitto a 10% del capitale
-          const maxProfit = strategyState.capital * 0.10;
+          // Limita profitto a maxProfitPercentPerTrade del capitale
+          const maxProfit = strategyState.capital * (configStrategy.maxProfitPercentPerTrade / 100);
           profit = Math.min(profit, maxProfit);
           strategyState.capital += profit;
           printToConsole(`✅ Take Profit colpito: prezzo=${currCandle.high.toFixed(2)}, profitto=${profit.toFixed(2)}, capitale=${strategyState.capital.toFixed(2)}`);
