@@ -46,7 +46,8 @@ const candlesAnchorFile = path.join(candlesStrategyDir, `candlesStrategy_${ancho
 
 // Stato della strategia (modificato per usare i parametri config)
 let strategyState = {
-  state: 'Waiting For CVDS',
+  // state: 'Waiting For CVDS',
+  state: 'Neutral',
   lastSignal: null,
   entryPrice: null,
   slTarget: null,
@@ -113,6 +114,9 @@ function aggregateCandles(candles, targetTFMinutes, lastProcessedTimestamp = 0) 
     const windowStart = Math.floor(candle.timestamp / targetTFMs) * targetTFMs;
 
     if (!currentWindow || currentWindow.start !== windowStart) {
+      
+      
+      
       if (currentWindow) {
         aggregated.push({
           timestamp: currentWindow.start,
@@ -197,7 +201,7 @@ function saveCandles(file, newCandles) {
     printToConsole(`📂 Salvate ${newCandles.length} nuove candele -> Totale: ${updatedCandles.length}`);  // Usa -> in ${file} per vedere dir salvataggio
     writeToCSV('SaveCandles', `Salvate ${newCandles.length} candele in ${file}`, strategyState.capital);
   } catch (error) {
-    printToConsole(`⚠️ Errore salvataggio candele ${file}: ${error.message}`);
+    printToConsole(`⚠️  Errore salvataggio candele ${file}: ${error.message}`);
     writeToCSV('Error', `Salvataggio candele ${file}: ${error.message}`, strategyState.capital);
   }
 }
@@ -257,7 +261,7 @@ function detectFVG(candles, index) {
   const fvgSensitivity = parseFloat(configStrategy.fvgSensitivity) || 0.2;
   const atrThreshold = atr * fvgSensitivity;
 
-  printToConsole(`🔍 FVG: ATR=${atr.toFixed(2)}, fvgSensitivity=${fvgSensitivity.toFixed(2)}, Threshold=${atrThreshold.toFixed(2)}`);
+  printToConsole(`🔍 FVG ATR=${atr.toFixed(2)}, fvgSensitivity=${fvgSensitivity.toFixed(2)}, Threshold=${atrThreshold.toFixed(2)}`);
   writeToCSV('FVG', `Check: ATR=${atr.toFixed(2)}, fvgSensitivity=${fvgSensitivity.toFixed(2)}, Threshold=${atrThreshold.toFixed(2)}`, strategyState.capital);
 
   if (curr.low > prev2.high && prev1.close > prev2.high) {
@@ -284,7 +288,7 @@ function detectFVG(candles, index) {
     }
   }
 
-  printToConsole(`🔍 FVG: Non rilevato, condizioni non soddisfatte`);
+  printToConsole(`🔍 FVG Non rilevato, condizioni non soddisfatte`);
   writeToCSV('FVG', `Non rilevato, condizioni non soddisfatte`, strategyState.capital);
   return null;
 }
@@ -297,7 +301,8 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
 
     console.log("")
     console.log("*******************************************************")
-    console.log("************** Processing New Candle ... **************")
+    // console.log(`************* Processed *************`) 
+    console.log("*************  Waiting for New Candle *****************")
     console.log("*******************************************************")
     console.log("")
 
@@ -364,7 +369,7 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
     }
 
     // Log stato buffer
-    printToConsole(`📊 Buffer: 1m=${candles1mBuffer.length}, chartTF=${candlesChartTFBuffer.length}, anchor=${candlesAnchorBuffer.length}`);
+    printToConsole(`📊 Buffer 1m=${candles1mBuffer.length}, chartTF=${candlesChartTFBuffer.length}, anchor=${candlesAnchorBuffer.length}`);
 
     const lastCandleIndex = candlesChartTFBuffer.length - 1;
     if (lastCandleIndex < 0) {
@@ -381,43 +386,53 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
     const vdAtr = calculateRMA(candlesAnchorBuffer.map(c => c.maxVolume - c.minVolume), configStrategy.atrLen || 14);
 
     // Stato attuale
-    printToConsole(`📈 Stato: ${strategyState.state} | Capitale: ${strategyState.capital.toFixed(2)} | ATR=${atr.toFixed(2)}`);
+    printToConsole(`📈 Stato ${strategyState.state} | Capitale: ${strategyState.capital.toFixed(2)} | ATR=${atr.toFixed(2)}`);
+
+
+    // *********************** INIZIO STRATEGIA *****************
+
 
     // Controllo CVD
-    if (candlesAnchorBuffer.length >= 2) {
-      const prevVolume = candlesAnchorBuffer[candlesAnchorBuffer.length - 2].lastVolume;
-      const currVolume = candlesAnchorBuffer[candlesAnchorBuffer.length - 1].lastVolume;
+    if (strategyState.state === 'Entry Taken') {printToConsole(`🔎 CVD Skipped -> Entry Taken`) }
+    if (strategyState.state != 'Entry Taken') {
+      if (candlesAnchorBuffer.length >= configStrategy.chartTF) {
+        const prevVolume = candlesAnchorBuffer[candlesAnchorBuffer.length - 2].lastVolume;
+        const currVolume = candlesAnchorBuffer[candlesAnchorBuffer.length - 1].lastVolume;
 
-      printToConsole(`🔎 CVD: prevVolume=${prevVolume.toFixed(2)}, currVolume=${currVolume.toFixed(2)}`);
-      writeToCSV('Signal', `CVD check, prevVolume=${prevVolume.toFixed(2)}, currVolume=${currVolume.toFixed(2)}`, strategyState.capital);
+        printToConsole(`🔎 CVD Previous Volume = ${prevVolume.toFixed(2)}, Current Volume = ${currVolume.toFixed(2)}`);
+        writeToCSV('Signal', `CVD check, prevVolume=${prevVolume.toFixed(2)}, currVolume=${currVolume.toFixed(2)}`, strategyState.capital);
 
-      if (prevVolume <= 0 && currVolume > 0) {
-        strategyState.lastSignal = 'Bull';
-        strategyState.state = 'Waiting For FVG';
-        printToConsole(`📈 Segnale Bullish CVD su TF ${anchorTFMinutes}m (lastVolume: ${currVolume.toFixed(2)})`);
-        writeToCSV('Signal', `Bullish CVD su TF ${anchorTFMinutes}m, lastVolume=${currVolume.toFixed(2)}`, strategyState.capital);
-      } else if (prevVolume >= 0 && currVolume < 0) {
-        strategyState.lastSignal = 'Bear';
-        strategyState.state = 'Waiting For FVG';
-        printToConsole(`📉 Segnale Bearish CVD su TF ${anchorTFMinutes}m (lastVolume: ${currVolume.toFixed(2)})`);
-        writeToCSV('Signal', `Bearish CVD su TF ${anchorTFMinutes}m, lastVolume=${currVolume.toFixed(2)}`, strategyState.capital);
+        if (prevVolume <= 0 && currVolume > 0) {
+          strategyState.lastSignal = 'Bull';
+          strategyState.state = 'Waiting For FVG';
+          printToConsole(`📈 Segnale Bullish CVD su TF ${anchorTFMinutes}m (lastVolume: ${currVolume.toFixed(2)})`);
+          writeToCSV('Signal', `Bullish CVD su TF ${anchorTFMinutes}m, lastVolume=${currVolume.toFixed(2)}`, strategyState.capital);
+        } else if (prevVolume >= 0 && currVolume < 0) {
+          strategyState.lastSignal = 'Bear';
+          strategyState.state = 'Waiting For FVG';
+          printToConsole(`📉 Segnale Bearish CVD su TF ${anchorTFMinutes}m (lastVolume: ${currVolume.toFixed(2)})`);
+          writeToCSV('Signal', `Bearish CVD su TF ${anchorTFMinutes}m, lastVolume=${currVolume.toFixed(2)}`, strategyState.capital);
+        } else {
+          printToConsole(`🔎 Nessun segnale CVD Previous Volume = ${prevVolume.toFixed(2)}, Current Volume = ${currVolume.toFixed(2)}`);
+          writeToCSV('Signal', `Nessun CVD, prevVolume=${prevVolume.toFixed(2)}, currVolume=${currVolume.toFixed(2)}`, strategyState.capital);
+        }
       } else {
-        printToConsole(`🔎 Nessun segnale CVD: prevVolume=${prevVolume.toFixed(2)}, currVolume=${currVolume.toFixed(2)}`);
-        writeToCSV('Signal', `Nessun CVD, prevVolume=${prevVolume.toFixed(2)}, currVolume=${currVolume.toFixed(2)}`, strategyState.capital);
+        printToConsole(`⚠️  Insufficienti candele anchor (${candlesAnchorBuffer.length}) per CVD`);
+        writeToCSV('Signal', `Insufficienti candele anchor (${candlesAnchorBuffer.length})`, strategyState.capital);
       }
-    } else {
-      printToConsole(`⚠️ Insufficienti candele anchor (${candlesAnchorBuffer.length}) per CVD`);
-      writeToCSV('Signal', `Insufficienti candele anchor (${candlesAnchorBuffer.length})`, strategyState.capital);
     }
 
     // Controllo FVG
-    if (strategyState.state === 'Waiting For FVG') {
-      const fvg = detectFVG(candlesChartTFBuffer, lastCandleIndex);
-      if (fvg && fvg.type === strategyState.lastSignal + 'ish') {
-        strategyState.fvgWaiting = fvg;
-        strategyState.state = 'Enter Position';
-        printToConsole(`🔍 FVG ${fvg.type} confermato su TF ${chartTFMinutes}m: top=${fvg.top.toFixed(2)}, bottom=${fvg.bottom.toFixed(2)}`);
-        writeToCSV('FVG', `${fvg.type} confermato, top=${fvg.top.toFixed(2)}, bottom=${fvg.bottom.toFixed(2)}, size=${fvg.size.toFixed(2)}`, strategyState.capital);
+    if (strategyState.state === 'Entry Taken') {printToConsole(`🔎 FVG Skipped -> Entry Taken`) }
+    if (strategyState.state != 'Entry Taken') {
+      if (strategyState.state === 'Waiting For FVG') {
+        const fvg = detectFVG(candlesChartTFBuffer, lastCandleIndex);
+        if (fvg && fvg.type === strategyState.lastSignal + 'ish') {
+          strategyState.fvgWaiting = fvg;
+          strategyState.state = 'Enter Position';
+          printToConsole(`🔍 FVG ${fvg.type} confermato su TF ${chartTFMinutes}m: top=${fvg.top.toFixed(2)}, bottom=${fvg.bottom.toFixed(2)}`);
+          writeToCSV('FVG', `${fvg.type} confermato, top=${fvg.top.toFixed(2)}, bottom=${fvg.bottom.toFixed(2)}, size=${fvg.size.toFixed(2)}`, strategyState.capital);
+        }
       }
     }
 
@@ -474,7 +489,8 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
     // Gestione posizione aperta
     if (strategyState.state === 'Entry Taken') {
       const currCandle = candlesChartTFBuffer[lastCandleIndex];
-      printToConsole(`🔄 Posizione aperta: curr.high=${currCandle.high.toFixed(2)}, curr.low=${currCandle.low.toFixed(2)}, SL=${strategyState.slTarget.toFixed(2)}, TP=${strategyState.tpTarget.toFixed(2)}`);
+      printToConsole(`🔄 Posizione aperta High = ${currCandle.high.toFixed(2)}, Low = ${currCandle.low.toFixed(2)}`);
+      printToConsole(`🔄 Posizione aperta TP = ${strategyState.tpTarget.toFixed(2)}, SL = ${strategyState.slTarget.toFixed(2)}`);
 
       if (strategyState.lastSignal === 'Bull') {
         if (currCandle.low <= strategyState.slTarget) {
@@ -513,7 +529,7 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
       }
     }
   } catch (error) {
-    printToConsole(`⚠️ Errore strategia: ${error.message}`);
+    printToConsole(`⚠️  Errore strategia: ${error.message}`);
     writeToCSV('Error', `Strategia: ${error.message}`, strategyState.capital);
   }
 }
@@ -536,7 +552,7 @@ async function runStrategy() {
     // Inizializza file candele strategia
     if (fs.existsSync(candlesStrategy1mFile)) {
       fs.unlinkSync(candlesStrategy1mFile);
-      printToConsole(`🗑️ Eliminato file esistente ${candlesStrategy1mFile}`);
+      printToConsole(`🗑️  Eliminato file esistente ${candlesStrategy1mFile}`);
       writeToCSV('Start', `Eliminato file ${candlesStrategy1mFile}`, strategyState.capital);
     }
     fs.writeFileSync(candlesStrategy1mFile, JSON.stringify([]));
@@ -563,7 +579,7 @@ async function runStrategy() {
 
       // Elabora candele
       for (let i = 0; i < candles.length; i++) {        
-        printToConsole(`📅 Elaborazione candela ${i + 1}/${candles.length} (timestamp: ${new Date(candles[i].timestamp).toISOString()})`);
+        printToConsole(`📅 Elaborazione candela ${i + 1}/${candles.length} Timestamp ${new Date(candles[i].timestamp).toISOString()}`);
         processCandle(candles[i], i, candles, true);
       }
 
@@ -595,7 +611,7 @@ async function runStrategy() {
           }
         }
       } catch (error) {
-        printToConsole(`⚠️ Errore modalità live: ${error.message}`);
+        printToConsole(`⚠️  Errore modalità live: ${error.message}`);
         writeToCSV('Error', `Modalità live: ${error.message}`, strategyState.capital);
       }
     }, POLLING_INTERVAL * 1000);
@@ -604,7 +620,7 @@ async function runStrategy() {
     writeToCSV('Start', `Sistema pronto`, strategyState.capital);
 
   } catch (error) {
-    printToConsole(`⚠️ Errore iniziale: ${error.message}`);
+    printToConsole(`⚠️  Errore iniziale: ${error.message}`);
     writeToCSV('Error', `Inizializzazione: ${error.message}`, strategyState.capital);
     process.exit(1);
   }
