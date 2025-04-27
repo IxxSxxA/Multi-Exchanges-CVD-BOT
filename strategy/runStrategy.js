@@ -194,7 +194,7 @@ function saveCandles(file, newCandles) {
     updatedCandles.sort((a, b) => a.timestamp - b.timestamp);
 
     fs.writeFileSync(file, JSON.stringify(updatedCandles, null, 2));
-    printToConsole(`📂 Salvate ${newCandles.length} nuove candele in ${file} (totale: ${updatedCandles.length})`);
+    printToConsole(`📂 Salvate ${newCandles.length} nuove candele -> Totale: ${updatedCandles.length}`);  // Usa -> in ${file} per vedere dir salvataggio
     writeToCSV('SaveCandles', `Salvate ${newCandles.length} candele in ${file}`, strategyState.capital);
   } catch (error) {
     printToConsole(`⚠️ Errore salvataggio candele ${file}: ${error.message}`);
@@ -204,7 +204,7 @@ function saveCandles(file, newCandles) {
 
 function calculateATR(candles, period) {
   if (!candles || candles.length < period + 1) {
-    printToConsole(`⚠️ ATR: Insufficienti candele (${candles ? candles.length : 0}) per periodo ${period}`);
+    printToConsole(`⚠️  ATR Insufficienti candele (${candles ? candles.length : 0}) per periodo ${period}`);
     return 0;
   }
   let trSum = 0;
@@ -223,7 +223,7 @@ function calculateATR(candles, period) {
 
 function calculateSMA(values, period) {
   if (!values || values.length < period) {
-    printToConsole(`⚠️ SMA: Insufficienti valori (${values ? values.length : 0}) per periodo ${period}`);
+    printToConsole(`⚠️  SMA Insufficienti valori (${values ? values.length : 0}) per periodo ${period}`);
     return 0;
   }
   const sum = values.slice(-period).reduce((a, b) => a + b, 0);
@@ -232,7 +232,7 @@ function calculateSMA(values, period) {
 
 function calculateRMA(values, period) {
   if (!values || values.length < period) {
-    printToConsole(`⚠️ RMA: Insufficienti valori (${values ? values.length : 0}) per periodo ${period}`);
+    printToConsole(`⚠️  RMA Insufficienti valori (${values ? values.length : 0}) per periodo ${period}`);
     return 0;
   }
   let rma = values[0];
@@ -245,7 +245,7 @@ function calculateRMA(values, period) {
 
 function detectFVG(candles, index) {
   if (!candles || index < 2) {
-    printToConsole(`🔍 FVG: Non rilevato, indice insufficiente (${index})`);
+    printToConsole(`🔍 FVG Non rilevato, indice insufficiente (${index})`);
     writeToCSV('FVG', `Non rilevato, indice insufficiente (${index})`, strategyState.capital);
     return null;
   }
@@ -294,6 +294,14 @@ function detectFVG(candles, index) {
 
 function processCandle(candle, index, allCandles, isBacktest = false) {
   try {
+
+    console.log("")
+    console.log("*******************************************************")
+    console.log("************** Processing New Candle ... **************")
+    console.log("*******************************************************")
+    console.log("")
+
+
     // Verifica capitale valido (modificato per usare config.capitalGrowthLimit)
     const initialAmount = parseFloat(configStrategy.initialAmount) || 10000;
     if (strategyState.capital > initialAmount * configStrategy.capitalGrowthLimit) {
@@ -424,7 +432,7 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
       printToConsole(`🚪 Preparazione entrata: entryPrice=${entryPrice.toFixed(2)}, atrCVDS=${atrCVDS.toFixed(2)}, maxATRMult=${maxATRMult.toFixed(2)}, slDistance=${slDistance.toFixed(2)}`);
 
       if (slDistance <= 0 || !Number.isFinite(slDistance)) {
-        printToConsole(`⚠️ Entrata saltata: slDistance non valido (${slDistance})`);
+        printToConsole(`⚠️  Entrata saltata: slDistance non valido (${slDistance})`);
         writeToCSV('Error', `Entrata saltata: slDistance non valido (${slDistance})`, strategyState.capital);
         strategyState.state = 'Waiting For FVG';
         return;
@@ -434,7 +442,7 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
       strategyState.positionSize = (riskPerTrade / slDistance) / entryPrice;
 
       if (!Number.isFinite(strategyState.positionSize) || strategyState.positionSize <= 0) {
-        printToConsole(`⚠️ Entrata saltata: positionSize non valido (${strategyState.positionSize})`);
+        printToConsole(`⚠️  Entrata saltata: positionSize non valido (${strategyState.positionSize})`);
         writeToCSV('Error', `Entrata saltata: positionSize non valido (${strategyState.positionSize})`, strategyState.capital);
         strategyState.state = 'Waiting For FVG';
         return;
@@ -554,7 +562,7 @@ async function runStrategy() {
       writeToCSV('Start', `Copiato storico in ${candlesStrategy1mFile}`, strategyState.capital);
 
       // Elabora candele
-      for (let i = 0; i < candles.length; i++) {
+      for (let i = 0; i < candles.length; i++) {        
         printToConsole(`📅 Elaborazione candela ${i + 1}/${candles.length} (timestamp: ${new Date(candles[i].timestamp).toISOString()})`);
         processCandle(candles[i], i, candles, true);
       }
@@ -600,7 +608,9 @@ async function runStrategy() {
     writeToCSV('Error', `Inizializzazione: ${error.message}`, strategyState.capital);
     process.exit(1);
   }
+
 }
+
 
 // Avvia la strategia
 runStrategy();

@@ -10,12 +10,12 @@ const configStrategy = {
   initialAmount: "10000",     // Initial Amount for the strategy
 
   // Risk Management
-  riskPerTrade: 0.01,            // % capitale per trade
-  maxPositionSizePercent: 5,     // % max per posizione
-  maxProfitPercentPerTrade: 10,  // % profitto massimo
-  capitalGrowthLimit: 10,        // Moltiplicatore capitale massimo
+  riskPerTrade: 10,            // % capitale per trade
+  maxPositionSizePercent: 100,     // % max per posizione
+  maxProfitPercentPerTrade: 9999,  // % profitto massimo
+  capitalGrowthLimit: 9999,        // Moltiplicatore capitale massimo
   pollingInterval: 60,           // Secondi
-  memoryBufferMultiplier: 3,     // Multiplo di atrLen/maxBarsBack
+  memoryBufferMultiplier: 5,     // Multiplo di atrLen/maxBarsBack
   enableDynamicBuffer: true,     // Calcolo automatico buffer -> Numero candele in memoria dinamico
 
   // Fair Value Gaps (FVG) Settings
@@ -48,9 +48,9 @@ const configStrategy = {
   minimumFVGSize: 2, // Dimensione minima FVG (in barre)
   overlapThresholdPercentage: 0, // Percentuale di sovrapposizione per combinare FVG
   atrLen: 10, // Lunghezza ATR
+  atrLenCVDS: 50, // Lunghezza ATR per TP/SL dinamici
   maxBarsBack: 50, // Massimo numero di barre indietro per analisi
-  extendLastXFVGsCount: 20, // Numero di FVG da estendere
-  atrLenCVDS: 50 // Lunghezza ATR per TP/SL dinamici
+  extendLastXFVGsCount: 20 // Numero di FVG da estendere  
 };
 
 // Esporta la configurazione
