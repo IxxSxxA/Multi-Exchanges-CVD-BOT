@@ -5,6 +5,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import configStrategy from './configStrategy.js';
 
+
+
 // ------------------- Configurazione e Inizializzazione -------------------
 
 const __filename = fileURLToPath(import.meta.url);
@@ -29,13 +31,16 @@ const maxCandlesInMemory = calculateOptimalBufferSize(configStrategy);
 // Directory e file (nessuna modifica qui)
 const candlesDir = path.join(rootDir, 'candles');
 const candlesFile = path.join(candlesDir, 'candles_1m.json');
-const strategyDir = path.join(rootDir, 'strategy');
-const candlesStrategyDir = path.join(strategyDir, 'candlesStrategy');
+const strategyDir = path.join(rootDir, 'strategy/candlesStrategy');
+const candlesStrategyDir = path.join(rootDir, 'strategy/candlesStrategy');
 const tradesFile = path.join(strategyDir, 'trades.csv');
+const tradesJsonFile = path.join(strategyDir, 'trades.json');
+
 
 // Normalizza i timeframe (nessuna modifica qui)
 const chartTFMinutes = parseInt(configStrategy.chartTF?.replace(/m$/, '') || 1);
 const anchorTFMinutes = parseInt(configStrategy.anchorInput?.replace(/m$/, '') || 3);
+
 
 // File delle candele (nessuna modifica qui)
 const candlesStrategy1mFile = path.join(candlesStrategyDir, 'candlesStrategy_1m.json');
@@ -43,6 +48,7 @@ const candlesChartTFFile = chartTFMinutes === 1
   ? candlesStrategy1mFile
   : path.join(candlesStrategyDir, `candlesStrategy_${chartTFMinutes}m.json`);
 const candlesAnchorFile = path.join(candlesStrategyDir, `candlesStrategy_${anchorTFMinutes}m.json`);
+
 
 // Stato della strategia (modificato per usare i parametri config)
 let strategyState = {
@@ -70,6 +76,39 @@ const POLLING_INTERVAL = configStrategy.pollingInterval || 60;
 
 // ------------------- Funzioni Ausiliarie -------------------
 
+function trackTradesToJson(event, details, capital, candleTimestamp) {
+  try {
+    // const tradesJsonFile = path.join(candlesStrategyDir, 'trades.json');
+    
+    // salvo timestamp evento come millisecondi numerici
+    // salvo anche timestamp candela separato per sincronizzazione nella chart
+    const tradeData = {
+      timestamp: candleTimestamp ?? Date.now(),
+      candleTimestamp: candleTimestamp ?? Date.now(),
+      event,
+      details,
+      capital: Number.isFinite(capital) ? capital.toFixed(2) : 'NaN',
+      entryPrice: strategyState.entryPrice ? strategyState.entryPrice.toFixed(2) : null,
+      tpTarget: strategyState.tpTarget ? strategyState.tpTarget.toFixed(2) : null,
+      slTarget: strategyState.slTarget ? strategyState.slTarget.toFixed(2) : null,
+      positionSize: strategyState.positionSize ? strategyState.positionSize.toFixed(6) : null,
+      positionType: strategyState.lastSignal || null
+    };
+
+    let existingData = [];
+    if (fs.existsSync(tradesJsonFile)) {
+      existingData = JSON.parse(fs.readFileSync(tradesJsonFile, 'utf8'));
+    }
+
+    existingData.push(tradeData);
+    fs.writeFileSync(tradesJsonFile, JSON.stringify(existingData, null, 2));
+    
+  } catch (error) {
+    console.error(`Errore scrittura JSON trade: ${error.message}`);
+  }
+}
+
+
 function ensureDirectoryExists(dirPath) {
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
@@ -79,6 +118,7 @@ function ensureDirectoryExists(dirPath) {
   }
   return false;
 }
+
 
 function writeToCSV(event, details, capital) {
   try {
@@ -111,7 +151,8 @@ function aggregateCandles(candles, targetTFMinutes, lastProcessedTimestamp = 0) 
   for (const candle of candles) {
     if (candle.timestamp <= lastProcessedTimestamp) continue;
 
-    const windowStart = Math.floor(candle.timestamp / targetTFMs) * targetTFMs;
+    // const windowStart = Math.floor(candle.timestamp / targetTFMs) * targetTFMs;
+    const windowStart = candle.timestamp;
 
     if (!currentWindow || currentWindow.start !== windowStart) {
       
@@ -346,7 +387,7 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
     }
 
     // Aggrega a anchorInput
-    const candlesAnchor = aggregateCandles(tempCandles, anchorTFMinutes, lastProcessed15mTimestamp);
+    /* const candlesAnchor = aggregateCandles(tempCandles, anchorTFMinutes, lastProcessed15mTimestamp);
     if (candlesAnchor.length > 0) {
       lastProcessed15mTimestamp = Math.max(...candlesAnchor.map(c => c.timestamp));
       candlesAnchorBuffer.push(...candlesAnchor);
@@ -354,7 +395,31 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
         candlesAnchorBuffer = candlesAnchorBuffer.slice(-maxCandlesInMemory);
       }
       saveCandles(candlesAnchorFile, candlesAnchor);
-    }
+    } */
+
+
+      const candlesAnchor = aggregateCandles(tempCandles, anchorTFMinutes, 0);  // Usa 0 per elaborare tutte sempre
+
+      if (candlesAnchor.length > 0) {
+        // Filtra e aggiungi solo nuove candele (come nel suggerimento precedente)
+        const existingTimestamps = new Set(candlesAnchorBuffer.map(c => c.timestamp));
+        const newCandles = candlesAnchor.filter(c => !existingTimestamps.has(c.timestamp));
+      
+        if (newCandles.length > 0) {
+          candlesAnchorBuffer.push(...newCandles);
+      
+          if (candlesAnchorBuffer.length > maxCandlesInMemory) {
+            candlesAnchorBuffer = candlesAnchorBuffer.slice(-maxCandlesInMemory);
+          }
+      
+          // Aggiorna lastProcessed15mTimestamp per futuro uso
+          lastProcessed15mTimestamp = Math.max(...newCandles.map(c => c.timestamp));
+      
+          saveCandles(candlesAnchorFile, newCandles);
+        }
+      }
+      
+
 
     // Sincronizza con file candele 3m
     if (!isBacktest && fs.existsSync(candlesAnchorFile)) {
@@ -393,14 +458,18 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
 
 
     // Controllo CVD
-    if (strategyState.state === 'Entry Taken') {printToConsole(`🔎 CVD Skipped -> Entry Taken`) }
-    if (strategyState.state != 'Entry Taken') {
-      if (candlesAnchorBuffer.length >= configStrategy.chartTF) {
+      
+    
+    if (candlesAnchorBuffer.length >= configStrategy.chartTF) {
         const prevVolume = candlesAnchorBuffer[candlesAnchorBuffer.length - 2].lastVolume;
         const currVolume = candlesAnchorBuffer[candlesAnchorBuffer.length - 1].lastVolume;
 
         printToConsole(`🔎 CVD Previous Volume = ${prevVolume.toFixed(2)}, Current Volume = ${currVolume.toFixed(2)}`);
         writeToCSV('Signal', `CVD check, prevVolume=${prevVolume.toFixed(2)}, currVolume=${currVolume.toFixed(2)}`, strategyState.capital);
+
+      if (strategyState.state === 'Entry Taken') {printToConsole(`🔎 CVD Skipped -> Entry Taken`) }
+
+      if (strategyState.state != 'Entry Taken') {
 
         if (prevVolume <= 0 && currVolume > 0) {
           strategyState.lastSignal = 'Bull';
@@ -423,8 +492,7 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
     }
 
     // Controllo FVG
-    if (strategyState.state === 'Entry Taken') {printToConsole(`🔎 FVG Skipped -> Entry Taken`) }
-    if (strategyState.state != 'Entry Taken') {
+
       if (strategyState.state === 'Waiting For FVG') {
         const fvg = detectFVG(candlesChartTFBuffer, lastCandleIndex);
         if (fvg && fvg.type === strategyState.lastSignal + 'ish') {
@@ -434,7 +502,7 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
           writeToCSV('FVG', `${fvg.type} confermato, top=${fvg.top.toFixed(2)}, bottom=${fvg.bottom.toFixed(2)}, size=${fvg.size.toFixed(2)}`, strategyState.capital);
         }
       }
-    }
+
 
     // Entrata posizione
     if (strategyState.state === 'Enter Position') {
@@ -475,6 +543,14 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
         strategyState.tpTarget = entryPrice + Math.abs(entryPrice - strategyState.slTarget) * (parseFloat(configStrategy.DynamicRR) || 2);
         strategyState.state = 'Entry Taken';
         printToConsole(`🚀 Entrata Long: prezzo=${entryPrice.toFixed(2)}, size=${strategyState.positionSize.toFixed(6)}, SL=${strategyState.slTarget.toFixed(2)}, TP=${strategyState.tpTarget.toFixed(2)}`);
+    //     trackTradesToJson('Entry', `Long trade`, strategyState.capital); // <-- Aggiungi questa riga
+      
+    const candleTS = candlesChartTFBuffer.length > 0 
+  ? candlesChartTFBuffer[candlesChartTFBuffer.length - 1].timestamp 
+  : Date.now();
+
+trackTradesToJson('Entry', `Long trade`, strategyState.capital, candleTS);
+    
         writeToCSV('Entry', `Long, prezzo=${entryPrice.toFixed(2)}, size=${strategyState.positionSize.toFixed(6)}, SL=${strategyState.slTarget.toFixed(2)}, TP=${strategyState.tpTarget.toFixed(2)}`, strategyState.capital);
       } else if (strategyState.lastSignal === 'Bear') {
         strategyState.entryPrice = entryPrice;
@@ -482,6 +558,15 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
         strategyState.tpTarget = entryPrice - Math.abs(entryPrice - strategyState.slTarget) * (parseFloat(configStrategy.DynamicRR) || 2);
         strategyState.state = 'Entry Taken';
         printToConsole(`🚀 Entrata Short: prezzo=${entryPrice.toFixed(2)}, size=${strategyState.positionSize.toFixed(6)}, SL=${strategyState.slTarget.toFixed(2)}, TP=${strategyState.tpTarget.toFixed(2)}`);
+ //       trackTradesToJson('Entry', `Short trade`, strategyState.capital); // <-- Aggiungi questa riga
+
+ const candleTS = candlesChartTFBuffer.length > 0 
+  ? candlesChartTFBuffer[candlesChartTFBuffer.length - 1].timestamp 
+  : Date.now();
+
+trackTradesToJson('Entry', `Short trade`, strategyState.capital, candleTS);
+
+
         writeToCSV('Entry', `Short, prezzo=${entryPrice.toFixed(2)}, size=${strategyState.positionSize.toFixed(6)}, SL=${strategyState.slTarget.toFixed(2)}, TP=${strategyState.tpTarget.toFixed(2)}`, strategyState.capital);
       }
     }
@@ -497,6 +582,16 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
           const loss = strategyState.positionSize * (strategyState.entryPrice - currCandle.low);
           strategyState.capital -= loss;
           printToConsole(`❌ Stop Loss colpito: prezzo=${currCandle.low.toFixed(2)}, perdita=${loss.toFixed(2)}, capitale=${strategyState.capital.toFixed(2)}`);
+  //        trackTradesToJson('SL', `Stop Loss hit`, strategyState.capital); // <-- Aggiungi questa riga
+
+  const candleTS = candlesChartTFBuffer.length > 0 
+  ? candlesChartTFBuffer[candlesChartTFBuffer.length - 1].timestamp 
+  : Date.now();
+
+trackTradesToJson('Entry', `Stop Loss hit`, strategyState.capital, candleTS);
+
+
+
           writeToCSV('SL', `Prezzo=${currCandle.low.toFixed(2)}, perdita=${loss.toFixed(2)}`, strategyState.capital);
           strategyState = { state: 'Waiting For CVDS', lastSignal: null, entryPrice: null, slTarget: null, tpTarget: null, fvgWaiting: null, positionSize: null, capital: strategyState.capital };
         } else if (currCandle.high >= strategyState.tpTarget) {
@@ -506,6 +601,18 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
           profit = Math.min(profit, maxProfit);
           strategyState.capital += profit;
           printToConsole(`✅ Take Profit colpito: prezzo=${currCandle.high.toFixed(2)}, profitto=${profit.toFixed(2)}, capitale=${strategyState.capital.toFixed(2)}`);
+  //        trackTradesToJson('TP', `Take Profit hit`, strategyState.capital); // <-- Aggiungi questa riga
+
+  const candleTS = candlesChartTFBuffer.length > 0 
+  ? candlesChartTFBuffer[candlesChartTFBuffer.length - 1].timestamp 
+  : Date.now();
+
+trackTradesToJson('Entry', `Take Profit hit`, strategyState.capital, candleTS);
+
+
+
+
+
           writeToCSV('TP', `Prezzo=${currCandle.high.toFixed(2)}, profitto=${profit.toFixed(2)}`, strategyState.capital);
           strategyState = { state: 'Waiting For CVDS', lastSignal: null, entryPrice: null, slTarget: null, tpTarget: null, fvgWaiting: null, positionSize: null, capital: strategyState.capital };
         }
@@ -514,6 +621,19 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
           const loss = strategyState.positionSize * (currCandle.high - strategyState.entryPrice);
           strategyState.capital -= loss;
           printToConsole(`❌ Stop Loss colpito: prezzo=${currCandle.high.toFixed(2)}, perdita=${loss.toFixed(2)}, capitale=${strategyState.capital.toFixed(2)}`);
+  //        trackTradesToJson('SL', `Stop Loss hit`, strategyState.capital); // <-- Aggiungi questa riga
+
+
+  const candleTS = candlesChartTFBuffer.length > 0 
+  ? candlesChartTFBuffer[candlesChartTFBuffer.length - 1].timestamp 
+  : Date.now();
+
+trackTradesToJson('Entry', `Stop Loss hit`, strategyState.capital, candleTS);
+
+
+
+
+
           writeToCSV('SL', `Prezzo=${currCandle.high.toFixed(2)}, perdita=${loss.toFixed(2)}`, strategyState.capital);
           strategyState = { state: 'Waiting For CVDS', lastSignal: null, entryPrice: null, slTarget: null, tpTarget: null, fvgWaiting: null, positionSize: null, capital: strategyState.capital };
         } else if (currCandle.low <= strategyState.tpTarget) {
@@ -523,6 +643,14 @@ function processCandle(candle, index, allCandles, isBacktest = false) {
           profit = Math.min(profit, maxProfit);
           strategyState.capital += profit;
           printToConsole(`✅ Take Profit colpito: prezzo=${currCandle.low.toFixed(2)}, profitto=${profit.toFixed(2)}, capitale=${strategyState.capital.toFixed(2)}`);
+   //       trackTradesToJson('TP', `Take Profit hit`, strategyState.capital); // <-- Aggiungi questa riga
+     
+   const candleTS = candlesChartTFBuffer.length > 0 
+  ? candlesChartTFBuffer[candlesChartTFBuffer.length - 1].timestamp 
+  : Date.now();
+
+trackTradesToJson('Entry', `Take Profit hit`, strategyState.capital, candleTS);
+   
           writeToCSV('TP', `Prezzo=${currCandle.low.toFixed(2)}, profitto=${profit.toFixed(2)}`, strategyState.capital);
           strategyState = { state: 'Waiting For CVDS', lastSignal: null, entryPrice: null, slTarget: null, tpTarget: null, fvgWaiting: null, positionSize: null, capital: strategyState.capital };
         }

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trading Chart</title>
+  <link rel="stylesheet" href="../strategy/style.css">
+  <script type="module" src="../strategy/tradingChart.js"></script>
+</head>
+<body>
+  <div id="chart-container"></div>
+  <script type="module">
+    import { initTradingChart } from '../strategy/tradingChart.js';
+    document.addEventListener('DOMContentLoaded', initTradingChart);
+  </script>
+</body>
+</html>
