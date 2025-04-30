@@ -1,259 +1,274 @@
 import { createChart, CrosshairMode, LineStyle } from 'lightweight-charts';
-import configStrategy from './configStrategy.js';
+
+console.log('File JavaScript caricato');
+
+window.debugData = {};
 
 export async function initTradingChart() {
-    // Log della versione per conferma
-    console.log('Versione lightweight-charts:', window.TradingView?.version || 'unknown');
+  console.log('Inizio initTradingChart');
 
-    // 1. Configurazione tema dark leggero
-    const theme = {
-        chart: {
-            backgroundColor: '#2A2E39',
-            textColor: '#D1D4DC',
-            fontSize: 12,
-            fontFamily: 'Arial, sans-serif'
-        },
-        grid: {
-            vertLines: { 
-                color: '#3E4455', 
-                style: LineStyle.Dotted, 
-                visible: true 
-            },
-            horzLines: { 
-                color: '#3E4455', 
-                style: LineStyle.Dotted, 
-                visible: true 
-            }
-        },
-        crosshair: {
-            mode: CrosshairMode.Magnet,
-            vertLine: { 
-                color: '#6B7280',
-                width: 1,
-                style: LineStyle.Dashed,
-                labelBackgroundColor: '#4B5563',
-                labelTextColor: '#F3F4F6'
-            },
-            horzLine: { 
-                color: '#6B7280',
-                width: 1,
-                style: LineStyle.Dashed,
-                labelBackgroundColor: '#4B5563',
-                labelTextColor: '#F3F4F6'
-            }
-        },
-        priceScale: {
-            borderColor: '#3E4455',
-            textColor: '#D1D4DC',
-            scaleMargins: {
-                top: 0.1,
-                bottom: 0.1
-            }
-        },
-        timeScale: {
-            borderColor: '#3E4455',
-            textColor: '#D1D4DC',
-            timeVisible: true,
-            secondsVisible: false,
-            tickMarkFormatter: (time) => {
-                const date = new Date(time * 1000);
-                return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-            }
-        }
+  // Trova il container
+  const container = document.getElementById('chart-container');
+  if (!container) {
+    console.error('Container del grafico non trovato!');
+    return;
+  }
+  console.log('Container trovato:', container);
+  container.innerHTML = '';
+
+  // Crea il grafico
+  const chart = createChart(container, {
+    width: container.clientWidth,
+    height: container.clientHeight,
+    layout: {
+      background: { type: 'solid', color: '#2A2E39' },
+      textColor: '#D9D9D9',
+    },
+    grid: {
+      vertLines: { color: '#3D3D5C' },
+      horzLines: { color: '#3D3D5C' },
+    },
+    crosshair: {
+      mode: CrosshairMode.Normal,
+      vertLine: { color: '#758696' },
+      horzLine: { color: '#758696' },
+    },
+    rightPriceScale: {
+      borderColor: '#3D3D5C',
+      scaleMargins: { top: 0.1, bottom: 0.1 },
+    },
+    timeScale: {
+      borderColor: '#3D3D5C',
+      timeVisible: true,
+      secondsVisible: false,
+    },
+  });
+  console.log('Grafico creato:', chart);
+
+  // Crea la serie delle candele
+  const candleSeries = chart.addCandlestickSeries({
+    upColor: '#4CAF50',
+    downColor: '#F44336',
+    borderVisible: false,
+    wickUpColor: '#4CAF50',
+    wickDownColor: '#F44336',
+  });
+  console.log('Serie candele creata:', candleSeries);
+
+  // Caricamento dei dati delle candele
+  let candlesData;
+  try {
+    console.log('Inizio caricamento candele');
+    const candlesRes = await fetch('/strategy/candlesStrategy/candlesStrategy_3m.json');
+    console.log('Risposta candele:', candlesRes);
+    if (!candlesRes.ok) {
+      throw new Error('Errore nel caricamento del file candele JSON');
+    }
+    candlesData = await candlesRes.json();
+    console.log('Dati candele caricati:', candlesData);
+    console.log('Prime 2 candele:', candlesData.slice(0, 2));
+
+    window.debugData.candlesData = candlesData;
+  } catch (error) {
+    console.error('Errore caricamento file candele JSON:', error);
+    return;
+  }
+
+  // Trasforma i dati delle candele
+  console.log('Inizio trasformazione dati candele');
+  const candleData = candlesData.map(c => {
+    const transformed = {
+      time: Math.floor(c.timestamp / 1000),
+      open: parseFloat(c.open),
+      high: parseFloat(c.high),
+      low: parseFloat(c.low),
+      close: parseFloat(c.close),
     };
-
-    // 2. Caricamento dati dinamico
-    const chartTF = configStrategy.chartTF || '3';
-    const dataPromises = [
-        fetch(`./candlesStrategy/candlesStrategy_${chartTF}m.json`).then(handleResponse),
-        fetch(`./candlesStrategy/trades.json`).then(handleResponse)
-    ];
-
-    async function handleResponse(r) {
-        if (!r.ok) throw new Error(`HTTP ${r.status} loading ${r.url}`);
-        return r.json();
+    if (isNaN(transformed.time) || isNaN(transformed.open) || isNaN(transformed.high) || 
+        isNaN(transformed.low) || isNaN(transformed.close)) {
+      console.warn('Dati candele non validi:', c, transformed);
     }
+    return transformed;
+  });
+  console.log('Prime 2 candele trasformate:', candleData.slice(0, 2));
 
-    let candles, trades;
+  window.debugData.candleData = candleData;
+
+  // Imposta i dati delle candele
+  try {
+    candleSeries.setData(candleData);
+    console.log('Dati impostati per candele:', candleSeries.data().slice(0, 2));
+  } catch (error) {
+    console.error('Errore durante l\'impostazione dei dati candele:', error);
+    return;
+  }
+
+  // Funzione per aggiungere i trades
+  async function addTrades() {
+    // Caricamento dei dati dei trades
+    let tradesData;
     try {
-        [candles, trades] = await Promise.all(dataPromises);
-        console.log(`Caricati ${candles.length} candele e ${trades.length} trades`);
-        console.log('Esempio candela:', candles[0]);
-        console.log('Esempio trade:', trades[0]);
-        console.log('Timestamp candele:', candles.slice(0, 5).map(c => c.timestamp));
-        console.log('Timestamp trades:', trades.map(t => t.timestamp));
+      console.log('Inizio caricamento trades');
+      const tradesRes = await fetch('/strategy/candlesStrategy/trades.json');
+      console.log('Risposta trades:', tradesRes);
+      if (!tradesRes.ok) {
+        throw new Error('Errore nel caricamento del file trades JSON');
+      }
+      tradesData = await tradesRes.json();
+      console.log('Dati trades caricati:', tradesData);
+      console.log('Primi 2 trades:', tradesData.slice(0, 2));
+
+      window.debugData.tradesData = tradesData;
     } catch (error) {
-        console.error('Errore caricamento dati:', error);
-        showError(`Errore dati: ${error.message}`);
-        return;
+      console.error('Errore caricamento file trades JSON:', error);
+      return;
     }
 
-    // 3. Inizializzazione chart con gestione errori
-    const container = document.getElementById('chart-container');
-    if (!container) {
-        console.error('Elemento #chart-container non trovato');
-        return;
+    // Funzione per creare una linea orizzontale limitata nel tempo
+    function createHorizontalLineSeries(price, startTime, endTime, color, width = 2, lineStyle = LineStyle.Solid, isRecent = false, label = '') {
+      const lineSeries = chart.addLineSeries({
+        color: isRecent ? color + 'CC' : color + '66',
+        lineWidth: width,
+        lineStyle: isRecent ? LineStyle.Solid : LineStyle.Dashed,
+        priceLineVisible: false,
+      });
+
+      // Aggiungi un marker per il label
+      if (label) {
+        lineSeries.setMarkers([
+          {
+            time: startTime,
+            position: 'aboveBar',
+            color: color,
+            shape: 'circle',
+            text: label,
+            size: 2,
+          },
+        ]);
+      }
+
+      lineSeries.setData([
+        { time: startTime, value: price },
+        { time: endTime, value: price },
+      ]);
+      return lineSeries;
     }
 
-    // Forza lo stile del contenitore per evitare conflitti CSS
-    container.style.backgroundColor = '#2A2E39';
-    container.style.borderRadius = '12px';
-    container.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
+    // Processa i trades
+    console.log('Inizio processamento trades');
+    const maxTradesToShow = 5; // Ridotto per evitare sovrapposizioni
+    const recentTrades = tradesData.slice(-maxTradesToShow);
 
-    const chart = createChart(container, {
-        ...theme.chart,
-        width: container.clientWidth,
-        height: 650,
-        localization: {
-            locale: 'it-IT',
-            dateFormat: 'dd/MM/yyyy'
-        },
-        rightPriceScale: {
-            visible: true,
-            borderColor: theme.priceScale.borderColor,
-            textColor: theme.priceScale.textColor,
-            mode: 1
-        },
-        timeScale: {
-            ...theme.timeScale,
-            fixLeftEdge: true,
-            barSpacing: 10
-        },
-        layout: { // Esplicito per forzare il tema
-            backgroundColor: '#2A2E39',
-            textColor: '#D1D4DC'
+    // Mantieni traccia dei trades già processati per evitare duplicati
+    const processedEntries = new Set();
+
+    recentTrades.forEach((trade, index) => {
+      // Verifica che i dati del trade siano validi
+      if (!trade.entryPrice || !trade.tpTarget || !trade.slTarget || !trade.candleTimestamp || !trade.positionType) {
+        console.warn('Trade con dati mancanti:', trade);
+        return;
+      }
+
+      const entryPrice = parseFloat(trade.entryPrice);
+      const tpPrice = parseFloat(trade.tpTarget);
+      const slPrice = parseFloat(trade.slTarget);
+      if (isNaN(entryPrice) || isNaN(tpPrice) || isNaN(slPrice)) {
+        console.warn('Trade con dati non validi:', trade);
+        return;
+      }
+
+      const entryTime = Math.floor(trade.candleTimestamp / 1000);
+      if (isNaN(entryTime)) {
+        console.warn('Trade con timestamp non valido:', trade);
+        return;
+      }
+
+      // Crea un identificatore unico per il trade
+      const tradeKey = `${entryPrice}-${entryTime}`;
+      if (processedEntries.has(tradeKey)) {
+        console.warn('Trade duplicato:', trade);
+        return;
+      }
+      processedEntries.add(tradeKey);
+
+      let endTime;
+      if (trade.exitTimestamp) {
+        endTime = Math.floor(trade.exitTimestamp / 1000);
+      } else if (index < recentTrades.length - 1) {
+        const nextTrade = recentTrades[index + 1];
+        if (nextTrade && nextTrade.candleTimestamp) {
+          const nextTradeTime = Math.floor(nextTrade.candleTimestamp / 1000);
+          const timeToNextTrade = nextTradeTime - entryTime;
+          endTime = entryTime + Math.min(timeToNextTrade, 3600);
+        } else {
+          endTime = entryTime + 3600;
         }
-    });
+      } else {
+        endTime = entryTime + 3600;
+      }
 
-    console.log('Tema chart applicato:', {
-        backgroundColor: theme.chart.backgroundColor,
-        textColor: theme.chart.textColor,
-        gridVertLines: theme.grid.vertLines,
-        gridHorzLines: theme.grid.horzLines
-    });
-
-    // 4. Serie candlestick con stili raffinati
-    const candleSeries = chart.addCandlestickSeries({
-        upColor: '#10B981',
-        downColor: '#EF4444',
-        wickUpColor: '#10B98180',
-        wickDownColor: '#EF444480',
-        borderUpColor: '#10B981',
-        borderDownColor: '#EF4444',
-        priceScaleId: 'right'
-    });
-
-    // 5. Formattazione dati candele con validazione
-    const formattedCandles = candles.map(c => {
-        if (!c.timestamp) throw new Error('Timestamp mancante');
-        return {
-            time: Math.floor(c.timestamp / 1000), // Timestamp in millisecondi
-            open: validateNumber(c.open),
-            high: validateNumber(c.high),
-            low: validateNumber(c.low),
-            close: validateNumber(c.close)
-        };
-    });
-
-    function validateNumber(n) {
-        const num = parseFloat(n);
-        if (isNaN(num)) throw new Error(`Valore non numerico: ${n}`);
-        return num;
-    }
-
-    try {
-        candleSeries.setData(formattedCandles);
-        console.log('Candele impostate:', formattedCandles.length);
-        console.log('Primi 5 timestamp candele formattati:', formattedCandles.slice(0, 5).map(c => c.time));
-    } catch (error) {
-        console.error('Errore impostazione candele:', error);
-        showError(`Formato candele non valido`);
+      if (isNaN(endTime)) {
+        console.warn('Trade con endTime non valido:', trade);
         return;
-    }
+      }
 
-    // 6. Aggiunta marker e linee per trades
-    try {
-        // Marker per Entry e SL
-        const markers = trades
-            .filter(t => ['Entry', 'SL'].includes(t.event))
-            .map(t => {
-                const isEntry = t.event === 'Entry';
-                const isBull = t.positionType === 'Bull';
-                const timestamp = Math.floor(new Date(t.timestamp).getTime() / 1000);
-                return {
-                    time: timestamp,
-                    position: isEntry ? (isBull ? 'belowBar' : 'aboveBar') : 'aboveBar',
-                    color: isEntry ? (isBull ? '#10B981' : '#EF4444') : '#FBBF24',
-                    shape: isEntry ? (isBull ? 'arrowUp' : 'arrowDown') : 'circle',
-                    text: isEntry 
-                        ? `${t.positionType} @ ${validateNumber(t.entryPrice).toFixed(2)} (${t.details})`
-                        : `SL @ ${validateNumber(t.slTarget).toFixed(2)}`,
-                    size: isEntry ? 1.3 : 1,
-                    textColor: '#F3F4F6',
-                    textBackgroundColor: '#4B556380'
-                };
-            });
-        candleSeries.setMarkers(markers);
-        console.log('Marker impostati:', markers);
-        console.log('Timestamp marker:', markers.map(m => m.time));
+      const entryColor = trade.positionType === 'Bull' ? '#00C853' : '#D81B60';
+      const tpColor = '#2196F3';
+      const slColor = '#FF9800';
 
-        // Linee TP/SL solo per Entry, limitate agli ultimi 5 trade
-        const recentEntries = trades
-            .filter(t => t.event === 'Entry')
-            .slice(-5); // Limita agli ultimi 5 trade Entry
-        recentEntries.forEach(t => {
-            const lineOptions = {
-                lineWidth: 1.5,
-                lineStyle: LineStyle.Dashed,
-                axisLabelVisible: true,
-                titleTextColor: '#F3F4F6'
-            };
+      const isRecent = index === recentTrades.length - 1;
 
-            candleSeries.createPriceLine({
-                ...lineOptions,
-                price: validateNumber(t.tpTarget),
-                color: '#10B981',
-                title: `TP ${validateNumber(t.tpTarget).toFixed(2)}`
-            });
+      // Aggiungi la linea di entry price
+      try {
+        console.log(`Aggiunta linea di entry per trade ${index}: ${trade.positionType}, Prezzo: ${entryPrice}`);
+        createHorizontalLineSeries(
+          entryPrice,
+          entryTime,
+          endTime,
+          entryColor,
+          2,
+          LineStyle.Solid,
+          isRecent,
+          `Entry (${trade.positionType}) ${entryPrice.toFixed(2)}`
+        );
+      } catch (error) {
+        console.error('Errore durante l\'aggiunta della linea di entry price:', error, trade);
+        return;
+      }
 
-            candleSeries.createPriceLine({
-                ...lineOptions,
-                price: validateNumber(t.slTarget),
-                color: '#EF4444',
-                title: `SL ${validateNumber(t.slTarget).toFixed(2)}`
-            });
-        });
-        console.log('Linee TP/SL aggiunte per ultimi 5 trade Entry:', recentEntries.length);
-    } catch (error) {
-        console.error('Errore visualizzazione trades:', error);
-    }
-
-    // 7. Ottimizzazione visuale
-    chart.timeScale().fitContent();
-    chart.applyOptions(theme);
-
-    // 8. Gestione responsive
-    const resizeObserver = new ResizeObserver(entries => {
-        for (let entry of entries) {
-            chart.applyOptions({ 
-                width: entry.contentRect.width,
-                height: 650
-            });
-        }
+      // Aggiungi le linee di TP e SL
+      try {
+        console.log(`Aggiunta linea TP per trade ${index}: Prezzo: ${tpPrice}`);
+        createHorizontalLineSeries(tpPrice, entryTime, endTime, tpColor, 2, LineStyle.Solid, isRecent);
+        console.log(`Aggiunta linea SL per trade ${index}: Prezzo: ${slPrice}`);
+        createHorizontalLineSeries(slPrice, entryTime, endTime, slColor, 2, LineStyle.Solid, isRecent);
+      } catch (error) {
+        console.error('Errore durante l\'aggiunta delle linee di TP/SL:', error, trade);
+        return;
+      }
     });
-    resizeObserver.observe(container);
+  }
 
-    // 9. Stile per errori
-    function showError(msg) {
-        container.innerHTML = `
-            <div style="
-                color: #F3F4F6;
-                background: #EF4444;
-                padding: 20px;
-                border-radius: 8px;
-                text-align: center;
-                font-family: Arial, sans-serif;
-            ">${msg}</div>
-        `;
-    }
+  // Aggiungi i trades
+  try {
+    await addTrades();
+  } catch (error) {
+    console.error('Errore durante l\'aggiunta dei trades:', error);
+  }
+
+  chart.timeScale().fitContent();
+  console.log('Time scale adattato');
+
+  chart.applyOptions({});
+  console.log('Grafico aggiornato');
+
+  window.addEventListener('resize', () => {
+    chart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
+  });
+  console.log('Fine initTradingChart');
 }
+
+// Esegui la funzione immediatamente
+initTradingChart().catch(error => {
+  console.error('Errore durante l\'esecuzione di initTradingChart:', error);
+});
