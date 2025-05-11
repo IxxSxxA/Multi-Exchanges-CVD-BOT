@@ -2,8 +2,8 @@
 
 // Strategy Configuration
 export const STRATEGY = {
-    chartTF: "1",      // TF della Chart
-    anchorPeriod: "3", // Timeframe per Volume Delta (default: 15 minuti)
+    chartTF: "3",      // TF della Chart
+    anchorPeriod: "5", // Timeframe per Volume Delta (default: 15 minuti)
     // entryMode: "FVGs", // Modalità di ingresso (solo FVGs, come specificato)
     // signalType: "Raw", // Tipo di segnale (solo Raw, come specificato)
     initialAmount: "10000",     // Initial Amount for the strategy
@@ -14,7 +14,7 @@ export const GENERAL_CONFIG = {
     debug: false,
     // debugOBFVG: false,
     maxDistanceToLastBar: 100000, // Affects performance
-    // entryMode: "FVGs", // Only FVGs since Order Blocks are removed
+    entryMode: "FVGs", // Only FVGs since Order Blocks are removed
     // requireRetracement: false, // Require retracement for entry confirmation
     lowerTimeframe: "1", // Lower timeframe for calculations
     maxCVDS: 100 // Maximum number of CVDS signals to track
@@ -70,8 +70,8 @@ export const CVD_CONFIG = {
 
 // Risk Management Configuration
 export const RISK_CONFIG = {
-    // tpslMethod: "Dynamic", // "Dynamic" or "Fixed"
-    // riskAmount: "Normal", // "Highest", "High", "Normal", "Low", "Lowest"
+    tpslMethod: "Dynamic", // "Dynamic" or "Fixed"
+    riskAmount: "Normal", // "Highest", "High", "Normal", "Low", "Lowest"
     customSLATRMult: 6.5,
     getSLATRMult: (riskAmount, customSLATRMult) => {
         return riskAmount === "Highest" ? 10 :
