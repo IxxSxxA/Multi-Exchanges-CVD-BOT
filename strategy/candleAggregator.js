@@ -9,6 +9,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const aggregateCandles = (timeframeMinutes, candles = null) => {
+    // Add validation for timeframeMinutes
+    if (!timeframeMinutes || timeframeMinutes < 1) {
+        logger.error(`Timeframe non valido: ${timeframeMinutes}`);
+        throw new Error('Timeframe deve essere maggiore di 0');
+    }
+
     const sourceFile = path.resolve(__dirname, 'data', 'candles_1m.json');
     const targetFile = path.resolve(__dirname, 'data', `candles_${timeframeMinutes}m.json`);
 
@@ -21,6 +27,15 @@ export const aggregateCandles = (timeframeMinutes, candles = null) => {
         }
         rawCandles = JSON.parse(fs.readFileSync(sourceFile, 'utf8'));
     }
+
+    // Add validation for rawCandles
+    if (!Array.isArray(rawCandles) || rawCandles.length === 0) {
+        logger.error('Nessuna candela da aggregare');
+        throw new Error('Nessuna candela da aggregare');
+    }
+
+    // Sort candles by timestamp before aggregating
+    rawCandles.sort((a, b) => a.timestamp - b.timestamp);
 
     // Aggrega candele
     const timeframeMs = timeframeMinutes * 60 * 1000;

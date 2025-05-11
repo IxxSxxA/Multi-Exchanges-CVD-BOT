@@ -1,4 +1,3 @@
-// ../strategy/checkData.js
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -10,42 +9,60 @@ import logger from './logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const checkData = () => {
-    const sourceFile = path.resolve(__dirname, FILE_MANAGER_CONFIG.sourceCandleFile);
-    const targetDir = path.resolve(__dirname, FILE_MANAGER_CONFIG.targetDataDir);
-    const targetFile = path.resolve(targetDir, FILE_MANAGER_CONFIG.targetCandleFile);
+export const checkData = async () => {
+    try {
+        logger.info('Starting checkData...');  // Add initial log
 
-    // Controlla se il file sorgente esiste
-    if (!fs.existsSync(sourceFile)) {
-        logger.error(`File sorgente ${sourceFile} non trovato.`);
-        throw new Error(`File sorgente ${sourceFile} non trovato.`);
+        // Resolve absolute paths
+        const sourceFile = path.resolve(__dirname, '..', 'candles', 'candles_1m.json');
+        const targetDir = path.resolve(__dirname, 'data');
+        const targetFile = path.resolve(targetDir, 'candles_1m.json');
+
+        logger.info('Path resolution:');
+        logger.info(`Source file: ${sourceFile}`);
+        logger.info(`Target directory: ${targetDir}`);
+        logger.info(`Target file: ${targetFile}`);
+
+        // Verify source exists
+        if (!fs.existsSync(sourceFile)) {
+            logger.error(`Source file not found: ${sourceFile}`);
+            throw new Error(`Source file not found: ${sourceFile}`);
+        }
+        logger.info('Source file found');
+
+        // Create target directory
+        if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+            logger.info(`Created directory: ${targetDir}`);
+        }
+
+        // Copy file with verification
+        try {
+            fs.copyFileSync(sourceFile, targetFile);
+            const copySuccess = fs.existsSync(targetFile);
+            logger.info(`File copy ${copySuccess ? 'successful' : 'failed'}`);
+        } catch (error) {
+            logger.error(`Copy failed: ${error.message}`);
+            throw error;
+        }
+
+        // Aggregate candles
+        const chartTF = STRATEGY.chartTF;
+        const anchorPeriod = STRATEGY.anchorPeriod;
+        
+        const chartTFFile = path.resolve(targetDir, `candles_${chartTF}m.json`);
+        const anchorPeriodFile = path.resolve(targetDir, `candles_${anchorPeriod}m.json`);
+
+        logger.info('Starting candle aggregation...');
+        await aggregateCandles(parseInt(chartTF));
+        await aggregateCandles(parseInt(anchorPeriod));
+        logger.info('Candle aggregation completed');
+
+        return { chartTFFile, anchorPeriodFile, targetFile };
+    } catch (error) {
+        logger.error(`CheckData failed: ${error.stack}`);
+        throw error;
     }
-
-    // Crea la directory di destinazione se non esiste
-    if (!fs.existsSync(targetDir)) {
-        fs.mkdirSync(targetDir, { recursive: true });
-        logger.info(`Creata directory ${targetDir}`);
-    }
-
-    // Copia il file nella directory di destinazione
-    fs.copyFileSync(sourceFile, targetFile);
-    logger.info(`File copiato da ${sourceFile} a ${targetFile}`);
-
-    // Aggrega candele per chartTF e anchorPeriod
-    const { chartTF, anchorPeriod } = STRATEGY;
-    const chartTFFile = path.resolve(targetDir, `candles_${chartTF}m.json`);
-    const anchorPeriodFile = path.resolve(targetDir, `candles_${anchorPeriod}m.json`);
-
-    if (!fs.existsSync(chartTFFile)) {
-        logger.info(`Aggregazione candele per chartTF (${chartTF}m)...`);
-        aggregateCandles(parseInt(chartTF));
-    }
-    if (!fs.existsSync(anchorPeriodFile)) {
-        logger.info(`Aggregazione candele per anchorPeriod (${anchorPeriod}m)...`);
-        aggregateCandles(parseInt(anchorPeriod));
-    }
-
-    return { chartTFFile, anchorPeriodFile, targetFile };
 };
 
 export const readCandles = (filePath) => {

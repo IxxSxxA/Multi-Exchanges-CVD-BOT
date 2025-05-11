@@ -4,68 +4,135 @@ import { FVG_CONFIG, STRATEGY } from './configStrategy.js';
 import logger from './logger.js';
 
 export class FVGDetector {
+    #fvgs;
+    #fvgBars;
+    #atrLen;
+    #filterMethod;
+    #volumeThreshold;
+    #showLastXFVGs;
+
     constructor() {
-        this.fvgs = [];
-        this.fvgBars = FVG_CONFIG.fvgBars;
-        this.startZoneFrom = FVG_CONFIG.startZoneFrom;
-        this.atrLen = FVG_CONFIG.atrLen;
-        this.filterMethod = FVG_CONFIG.filterMethod;
-        this.volumeThreshold = FVG_CONFIG.volumeThreshold;
-        this.showLastXFVGs = FVG_CONFIG.showLastXFVGs;
+        this.#fvgs = [];
+        this.#fvgBars = FVG_CONFIG.fvgBars || 2;
+        this.#atrLen = FVG_CONFIG.atrLen || 10;
+        this.#filterMethod = FVG_CONFIG.filterMethod;
+        this.#volumeThreshold = FVG_CONFIG.volumeThreshold;
+        this.#showLastXFVGs = FVG_CONFIG.showLastXFVGs;
     }
 
-    processCandles(candles, anchorCandles = []) {
+    processCandles(candles, anchorPeriodCandles = []) {
+        if (!Array.isArray(candles) || !Array.isArray(anchorPeriodCandles)) {
+            logger.error('Input non valido per processCandles');
+            return [];
+        }
+
         candles.forEach((candle, index) => {
-            const barIndex = STRATEGY.chartTF === "1" ? index : index + candles.length;
-            this.detectFVG(candle, barIndex, anchorCandles);
-            this.updateFVGTouches(candle, barIndex, anchorCandles);
-            this.cleanupOldFVGs(barIndex);
+            try {
+                const barIndex = this.#calculateBarIndex(index, candles.length);
+                this.#detectAndProcessFVG(candle, barIndex, anchorPeriodCandles);
+                this.#updateFVGTouches(candle, barIndex);
+                this.#cleanupOldFVGs(barIndex);
+            } catch (error) {
+                logger.error(`Errore nel processamento candela ${index}: ${error.message}`);
+            }
         });
-        return this.fvgs;
+
+        return this.#fvgs;
     }
 
-    detectFVG(candle, barIndex, anchorCandles) {
-        if (barIndex < this.fvgBars) return;
+    #calculateBarIndex(index, totalLength) {
+        return STRATEGY.getChartTF() === 1 ? index : index + totalLength;
+    }
 
-        const prevCandle = anchorCandles[barIndex - this.fvgBars] || candle;
-        const bearFVG = prevCandle.low > candle.high;
-        const bullFVG = prevCandle.high < candle.low;
+    #detectAndProcessFVG(candle, barIndex, anchorPeriodCandles) {
+        if (barIndex < this.#fvgBars) return;
 
-        if (bearFVG || bullFVG) {
-            const fvg = {
-                isBull: bullFVG,
-                startBarIndex: barIndex,
-                startTime: candle.timestamp,
-                endBarIndex: null,
-                endTime: null,
-                max: bullFVG ? prevCandle.high : candle.high,
-                min: bullFVG ? candle.low : prevCandle.low,
-                isInverse: false,
-                inverseVolume: 0,
-                lastTouchedIFVG: null,
-                volume: candle.vBuy + candle.vSell
-            };
+        const prevCandle = anchorPeriodCandles[barIndex - this.#fvgBars];
+        if (!prevCandle) {
+            logger.debug(`Candela precedente non trovata per barIndex ${barIndex}`);
+            return;
+        }
 
-            const isValidFVG = this.filterFVG(fvg, anchorCandles);
-            if (isValidFVG) {
-                this.fvgs.push(fvg);
-                logger.info(`Rilevato FVG: ${fvg.isBull ? 'Bull' : 'Bear'}, min=${fvg.min}, max=${fvg.max}, barIndex=${barIndex}`);
+        const atr = calculateATR(anchorPeriodCandles, this.#atrLen);
+        const fvg = this.#detectFVG(candle, prevCandle, atr);
+
+        if (fvg) {
+            const fvgData = this.#createFVGData(fvg, candle, barIndex);
+            if (this.#filterFVG(fvgData, anchorPeriodCandles)) {
+                this.#fvgs.push(fvgData);
+                logger.info(`FVG ${fvgData.isBull ? 'Bull' : 'Bear'} rilevato: min=${fvgData.min}, max=${fvgData.max}`);
             }
         }
     }
 
-    filterFVG(fvg, anchorCandles) {
-        if (this.filterMethod === "ATR") {
-            const atr = calculateATR(anchorCandles, this.atrLen);
+    #detectFVG(candle, prevCandle, atr) {
+        const sensitivity = FVG_CONFIG.getFvgSensitivityValue();
+        const minimumGapSize = atr * sensitivity;
+
+        // Bull FVG
+        if (this.#isBullFVG(candle, prevCandle, minimumGapSize)) {
+            return {
+                type: 'bull',
+                size: candle.low - prevCandle.high,
+                top: candle.low,
+                bottom: prevCandle.high
+            };
+        }
+
+        // Bear FVG
+        if (this.#isBearFVG(candle, prevCandle, minimumGapSize)) {
+            return {
+                type: 'bear',
+                size: prevCandle.low - candle.high,
+                top: prevCandle.low,
+                bottom: candle.high
+            };
+        }
+
+        return null;
+    }
+
+    #isBullFVG(candle, prevCandle, minimumGapSize) {
+        const gap = prevCandle.high < candle.low;
+        const size = candle.low - prevCandle.high;
+        return gap && size >= minimumGapSize && size >= FVG_CONFIG.minimumFVGSize;
+    }
+
+    #isBearFVG(candle, prevCandle, minimumGapSize) {
+        const gap = prevCandle.low > candle.high;
+        const size = prevCandle.low - candle.high;
+        return gap && size >= minimumGapSize && size >= FVG_CONFIG.minimumFVGSize;
+    }
+
+    #createFVGData(fvg, candle, barIndex) {
+        return {
+            isBull: fvg.type === 'bull',
+            startBarIndex: barIndex,
+            startTime: candle.timestamp,
+            endBarIndex: null,
+            endTime: null,
+            max: fvg.top,
+            min: fvg.bottom,
+            size: fvg.size,
+            isInverse: false,
+            inverseVolume: 0,
+            lastTouchedIFVG: null,
+            volume: candle.vBuy + candle.vSell
+        };
+    }
+
+    #filterFVG(fvg, anchorPeriod) {
+        if (this.#filterMethod === "ATR") {
+            const atr = calculateATR(anchorPeriod, this.#atrLen);
             return atr && Math.abs(fvg.max - fvg.min) > atr;
-        } else if (this.filterMethod === "Volume Threshold") {
-            return fvg.volume > this.volumeThreshold;
+        } else if (this.#filterMethod === "Volume Threshold") {
+            return fvg.volume > this.#volumeThreshold;
         }
         return true;
     }
 
-    updateFVGTouches(candle, barIndex, anchorCandles) {
-        this.fvgs.forEach(curFVG => {
+    #updateFVGTouches(candle, barIndex) {
+        this.#fvgs.forEach(curFVG => {
             if (curFVG.endBarIndex === null) {
                 if (curFVG.isBull && (FVG_CONFIG.endMethod === "Wick" ? candle.low < curFVG.min : candle.close < curFVG.min)) {
                     curFVG.endBarIndex = barIndex;
@@ -87,13 +154,13 @@ export class FVGDetector {
         });
     }
 
-    cleanupOldFVGs(barIndex) {
-        if (this.showLastXFVGs > 0) {
-            this.fvgs = this.fvgs.filter(fvg => 
-                barIndex - fvg.startBarIndex <= this.showLastXFVGs || 
+    #cleanupOldFVGs(barIndex) {
+        if (this.#showLastXFVGs > 0) {
+            this.#fvgs = this.#fvgs.filter(fvg => 
+                barIndex - fvg.startBarIndex <= this.#showLastXFVGs || 
                 fvg.endBarIndex === null
             );
-            logger.debug(`Pulizia FVG: Rimasti ${this.fvgs.length} FVG`);
+            logger.debug(`Pulizia FVG: Rimasti ${this.#fvgs.length} FVG`);
         }
     }
 }

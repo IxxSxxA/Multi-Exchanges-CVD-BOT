@@ -3,21 +3,23 @@
 // Strategy Configuration
 export const STRATEGY = {
     chartTF: "3",      // TF della Chart
-    anchorPeriod: "5", // Timeframe per Volume Delta (default: 15 minuti)
-    // entryMode: "FVGs", // Modalità di ingresso (solo FVGs, come specificato)
-    // signalType: "Raw", // Tipo di segnale (solo Raw, come specificato)
-    initialAmount: "10000",     // Initial Amount for the strategy
+    anchorPeriod: "5", // Timeframe per Volume Delta
+    initialAmount: "10000",
+    // Convert strings to numbers where used for calculations
+    getChartTF: () => parseInt(STRATEGY.chartTF),
+    getAnchorPeriod: () => parseInt(STRATEGY.anchorPeriod),
+    getInitialAmount: () => parseFloat(STRATEGY.initialAmount)
 };
 
 // General Configuration
 export const GENERAL_CONFIG = {
     debug: false,
-    // debugOBFVG: false,
-    maxDistanceToLastBar: 100000, // Affects performance
-    entryMode: "FVGs", // Only FVGs since Order Blocks are removed
-    // requireRetracement: false, // Require retracement for entry confirmation
-    lowerTimeframe: "1", // Lower timeframe for calculations
-    maxCVDS: 100 // Maximum number of CVDS signals to track
+    maxDistanceToLastBar: 100000,
+    entryMode: "FVGs",
+    lowerTimeframe: "1",
+    maxCVDS: 100,
+    // Add helper for timeframe conversion
+    getLowerTimeframe: () => parseInt(GENERAL_CONFIG.lowerTimeframe)
 };
 
 // FVG Configuration
@@ -90,4 +92,34 @@ export const FILE_MANAGER_CONFIG = {
     sourceCandleFile: '../candles/candles_1m.json',
     targetDataDir: '../strategy/data/',
     targetCandleFile: 'candles_1m.json'
+};
+
+// Add validation function
+export const validateConfig = () => {
+    const errors = [];
+    
+    // Validate timeframes
+    if (STRATEGY.getAnchorPeriod() <= STRATEGY.getChartTF()) {
+        errors.push('anchorPeriod deve essere maggiore di chartTF');
+    }
+    
+    if (STRATEGY.getChartTF() <= GENERAL_CONFIG.getLowerTimeframe()) {
+        errors.push('chartTF deve essere maggiore di lowerTimeframe');
+    }
+    
+    // Validate FVG settings
+    if (!FVG_CONFIG.enabled && GENERAL_CONFIG.entryMode === "FVGs") {
+        errors.push('FVG è disabilitato ma entryMode è impostato su FVGs');
+    }
+    
+    // Validate risk settings
+    if (CVD_CONFIG.dynamicRR <= 0) {
+        errors.push('dynamicRR deve essere maggiore di 0');
+    }
+    
+    if (errors.length > 0) {
+        throw new Error(`Configuration validation failed:\n${errors.join('\n')}`);
+    }
+    
+    return true;
 };

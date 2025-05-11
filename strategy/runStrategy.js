@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { checkData, readCandles } from './checkData.js';
 import { aggregateCandles } from './candleAggregator.js';
 import { Strategy } from './strategy.js';
-import { STRATEGY, FILE_MANAGER_CONFIG } from './configStrategy.js';
+import { STRATEGY, FILE_MANAGER_CONFIG, validateConfig } from './configStrategy.js';
 import logger from './logger.js';
 
 // Ottieni __dirname in ES Modules
@@ -14,108 +14,140 @@ const __dirname = path.dirname(__filename);
 
 const runStrategy = async () => {
     try {
-        // Leggi chartTF, anchorPeriod e checkInterval
-        const { chartTF, anchorPeriod } = STRATEGY;
-        const { checkInterval, targetDataDir } = FILE_MANAGER_CONFIG;
+        console.log('Starting strategy execution...');
+        console.log('sourceCandleFile:', FILE_MANAGER_CONFIG.sourceCandleFile);
+        console.log('targetDataDir:', FILE_MANAGER_CONFIG.targetDataDir);
+        console.log('targetCandleFile:', FILE_MANAGER_CONFIG.targetCandleFile);
 
-        // Validazione timeframe
-        if (parseInt(anchorPeriod) <= parseInt(chartTF)) {
-            logger.error('anchorPeriod deve essere maggiore di chartTF.');
-            throw new Error('anchorPeriod deve essere maggiore di chartTF.');
-        }
+        // Validate configuration
+        validateConfig();
+        
+        logger.info('Running checkData...');
+        const { chartTFFile, anchorPeriodFile, targetFile } = await checkData();
+        logger.info('CheckData completed');
 
-        // Esegui checkData per copiare e aggregare candele
-        const { chartTFFile, anchorPeriodFile, targetFile } = checkData();
+        // Debug paths
+        logger.info('Files prepared:');
+        logger.info(`- Chart TF file: ${chartTFFile}`);
+        logger.info(`- Anchor period file: ${anchorPeriodFile}`);
+        logger.info(`- Target file: ${targetFile}`);
 
-        // Carica i dati delle candele
+        // Initialize strategy components
         let chartTFCandles = await readCandles(chartTFFile);
         let anchorPeriodCandles = await readCandles(anchorPeriodFile);
-
-        // Inizializza la strategia
         const strategy = new Strategy();
         const backtestResults = [];
 
-        // Backtest: loop su tutte le candele
+        // Run initial backtest
         if (chartTFCandles.length > 0) {
-            logger.info(`Inizio backtest con ${chartTFCandles.length} candele (chartTF: ${chartTF}m)`);
-            chartTFCandles.forEach((candle, index) => {
-                console.log('')
-                console.log('****************************************************************')
-                logger.info(`Processing index candle number ${index}`);
-                const result = strategy.processCandles(candle, anchorPeriodCandles);
-                backtestResults.push({
-                    timestamp: candle.timestamp,
-                    state: result.state,
-                    balance: result.balance,
-                    position: result.position,
-                    trades: result.trades.slice(-1)
-                });
-            });
-
-            // Salva i risultati del backtest
-            const backtestOutputFile = path.resolve(targetDataDir, 'backtest_results.json');
-            fs.writeFileSync(backtestOutputFile, JSON.stringify(backtestResults, null, 2));
-            logger.info(`Backtest completato. Risultati salvati in ${backtestOutputFile}`);
-            logger.info(`Bilancio finale backtest: ${strategy.balance}`);
-        } else {
-            logger.info('Nessuna candela storica trovata, passaggio diretto alla modalità live.');
+            logger.info(`Starting backtest with ${chartTFCandles.length} candles`);
+            for (const [index, candle] of chartTFCandles.entries()) {
+                const result = await processCandle(strategy, candle, anchorPeriodCandles, index, 'backtest');
+                backtestResults.push(result);
+            }
+            logger.info('Backtest completed');
         }
 
-        // Modalità live: controlla nuove candele ogni checkInterval
-        logger.info('Passaggio alla modalità live...');
-        let lastProcessedTimestamp = chartTFCandles.length > 0 ? chartTFCandles[chartTFCandles.length - 1].timestamp : 0;
-        let liveCandleIndex = chartTFCandles.length; // Continua l'indice dal backtest
+        // Start continuous monitoring
+        logger.info('Starting live monitoring mode...');
+        let lastProcessedTime = chartTFCandles[chartTFCandles.length - 1]?.timestamp || 0;
 
+        // Use setInterval for continuous monitoring
         setInterval(async () => {
             try {
-                // Ricarica candele a 1m
-                const newCandles1m = await readCandles(targetFile);
+                // Copy latest data
+                fs.copyFileSync(targetFile, targetFile); // Already handled by checkData
+                logger.debug('Updated candle data copied');
 
-                // Filtra nuove candele
-                const newCandles = newCandles1m.filter(candle => candle.timestamp > lastProcessedTimestamp);
-                if (newCandles.length === 0) {
-                    return;
-                }
+                // Read and filter new candles
+                const newCandles = await readCandles(targetFile);
+                const newCandlesFiltered = newCandles.filter(c => c.timestamp > lastProcessedTime);
 
-                logger.info(`Rilevate ${newCandles.length} nuove candele...`);
+                if (newCandlesFiltered.length > 0) {
+                    logger.info(`Processing ${newCandlesFiltered.length} new candles`);
 
-                // Aggiorna candele aggregate
-                chartTFCandles = aggregateCandles(parseInt(chartTF), newCandles1m);
-                anchorPeriodCandles = aggregateCandles(parseInt(anchorPeriod), newCandles1m);
+                    // Update aggregated timeframes
+                    await aggregateCandles(STRATEGY.getChartTF());
+                    await aggregateCandles(STRATEGY.getAnchorPeriod());
 
-                // Salva candele aggregate aggiornate
-                fs.writeFileSync(chartTFFile, JSON.stringify(chartTFCandles, null, 2));
-                fs.writeFileSync(anchorPeriodFile, JSON.stringify(anchorPeriodCandles, null, 2));
+                    // Reload aggregated candles
+                    chartTFCandles = await readCandles(chartTFFile);
+                    anchorPeriodCandles = await readCandles(anchorPeriodFile);
 
-                // Processa nuove candele
-                for (const candle of chartTFCandles.filter(c => c.timestamp > lastProcessedTimestamp)) {
-                    logger.info(`\nIndex candle number ${liveCandleIndex}`);
-                    const result = strategy.processCandles(candle, anchorPeriodCandles);
-                    logger.info(`Live - Stato: ${result.state}, Bilancio: ${result.balance}`);
-
-                    // Salva trade live
-                    if (result.trades.length > 0 && result.trades[result.trades.length - 1].status === 'open') {
-                        const liveTradesFile = path.resolve(targetDataDir, 'live_trades.json');
-                        fs.appendFileSync(liveTradesFile, JSON.stringify(result.trades.slice(-1), null, 2) + '\n');
+                    // Process new candles
+                    for (const candle of newCandlesFiltered) {
+                        const result = await processCandle(strategy, candle, anchorPeriodCandles, null, 'live');
+                        if (result.trades.length > 0) {
+                            logger.info(`New trade: ${JSON.stringify(result.trades[0])}`);
+                        }
                     }
-                    liveCandleIndex++;
+
+                    lastProcessedTime = newCandlesFiltered[newCandlesFiltered.length - 1].timestamp;
                 }
-
-                // Aggiorna l'ultimo timestamp processato
-                lastProcessedTimestamp = chartTFCandles[chartTFCandles.length - 1]?.timestamp || lastProcessedTimestamp;
             } catch (error) {
-                logger.error(`Errore in modalità live: ${error.message}`);
+                logger.error(`Live processing error: ${error.message}`);
+                // Don't throw here to keep the interval running
             }
-        }, checkInterval);
+        }, FILE_MANAGER_CONFIG.checkInterval);
 
-        logger.info(`In ascolto per nuove candele ogni ${checkInterval / 1000} secondi...`);
-
-        // Mantieni il processo attivo
-        await new Promise(resolve => {});
     } catch (error) {
-        logger.error(`Errore nell'esecuzione della strategia: ${error.message}`);
+        logger.error(`Strategy execution failed: ${error.stack}`);
+        process.exit(1);
     }
 };
 
-// Avvia la strategia
-runStrategy().catch(error => logger.error(error.message));
+const runBacktest = async (strategy, chartTFCandles, anchorPeriodCandles, results) => {
+    logger.info(`Starting backtest with ${chartTFCandles.length} candles`);
+    
+    for (const [index, candle] of chartTFCandles.entries()) {
+        const result = await processCandle(strategy, candle, anchorPeriodCandles, index, 'backtest');
+        results.push(result);
+    }
+    
+    await saveBacktestResults(results);
+};
+
+const runLiveTrading = async (strategy, chartTFCandles, anchorPeriodCandles, targetFile, chartTFFile, anchorPeriodFile, checkInterval) => {
+    logger.info('Switching to live mode...');
+    let lastProcessedTimestamp = getLastProcessedTimestamp(chartTFCandles);
+
+    return setInterval(async () => {
+        try {
+            const newCandles = await loadAndFilterNewCandles(targetFile, lastProcessedTimestamp);
+            if (newCandles.length === 0) return;
+
+            const updatedCandles = await updateAggregatedCandles(newCandles, chartTFFile, anchorPeriodFile);
+            await processNewCandles(strategy, updatedCandles, lastProcessedTimestamp);
+            
+            lastProcessedTimestamp = getLastProcessedTimestamp(updatedCandles.chartTFCandles);
+        } catch (error) {
+            logger.error(`Live trading error: ${error.message}`);
+        }
+    }, checkInterval);
+};
+
+async function processCandle(strategy, candle, anchorCandles, index, mode) {
+    logger.debug(`Processing ${mode} candle ${index}: ${JSON.stringify(candle)}`);
+    
+    const result = await strategy.processCandles(candle, anchorCandles);
+    
+    if (result?.trades?.length > 0) {
+        await saveTrade(result.trades[result.trades.length - 1], mode);
+    }
+    
+    return {
+        timestamp: candle.timestamp,
+        state: result?.state || 'unknown',
+        balance: result?.balance || 0,
+        position: result?.position || null,
+        trades: result?.trades?.slice(-1) || []
+    };
+}
+
+// Execute the async function
+runStrategy().catch(error => {
+    console.error('Fatal error:', error);
+    process.exit(1);
+});
+
+export default runStrategy;
