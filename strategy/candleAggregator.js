@@ -1,81 +1,68 @@
-// ../strategy/candleAggregator.js
-import fs from 'fs';
+// strategy/candleAggregator.js
+import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import logger from './logger.js';
+import chalk from 'chalk';
+import { STRATEGY, GENERAL_CONFIG } from './configStrategy.js';
 
-// Ottieni __dirname in ES Modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Funzione per aggregare candele
+export async function aggregateCandles(sourcePath, targetPath, chartTF) {
+    
+    console.log(chalk.yellow('***************************************************************************'));
+    console.log(chalk.cyan(`Aggregazione candele da 1m a ${chartTF}m...`));
 
-export const aggregateCandles = (timeframeMinutes, candles = null) => {
-    // Add validation for timeframeMinutes
-    if (!timeframeMinutes || timeframeMinutes < 1) {
-        logger.error(`Timeframe non valido: ${timeframeMinutes}`);
-        throw new Error('Timeframe deve essere maggiore di 0');
-    }
+    try {
+        // Leggi le candele da 1m
+        const rawData = await fs.readFile(sourcePath, 'utf-8');
+        const candles1m = JSON.parse(rawData);
 
-    const sourceFile = path.resolve(__dirname, 'data', 'candles_1m.json');
-    const targetFile = path.resolve(__dirname, 'data', `candles_${timeframeMinutes}m.json`);
-
-    // Carica candele se non fornite
-    let rawCandles = candles;
-    if (!rawCandles) {
-        if (!fs.existsSync(sourceFile)) {
-            logger.error(`File sorgente ${sourceFile} non trovato per aggregazione.`);
-            throw new Error(`File sorgente ${sourceFile} non trovato.`);
+        if (!Array.isArray(candles1m) || candles1m.length === 0) {
+            console.error(chalk.red('Nessuna candela valida trovata nel file sorgente.'));
+            return;
         }
-        rawCandles = JSON.parse(fs.readFileSync(sourceFile, 'utf8'));
-    }
 
-    // Add validation for rawCandles
-    if (!Array.isArray(rawCandles) || rawCandles.length === 0) {
-        logger.error('Nessuna candela da aggregare');
-        throw new Error('Nessuna candela da aggregare');
-    }
+        // Aggrega candele
+        const candlesAggregated = [];
+        const tfMs = chartTF * 60 * 1000; // Timeframe in millisecondi
 
-    // Sort candles by timestamp before aggregating
-    rawCandles.sort((a, b) => a.timestamp - b.timestamp);
+        for (let i = 0; i < candles1m.length; i += chartTF) {
+            const chunk = candles1m.slice(i, i + chartTF);
+            if (chunk.length === 0) break;
 
-    // Aggrega candele
-    const timeframeMs = timeframeMinutes * 60 * 1000;
-    const aggregatedCandles = [];
-    let currentCandle = null;
-    let startTime = null;
-
-    rawCandles.forEach(candle => {
-        const candleTime = Math.floor(candle.timestamp / timeframeMs) * timeframeMs;
-
-        if (!startTime || candleTime >= startTime + timeframeMs) {
-            if (currentCandle) {
-                aggregatedCandles.push(currentCandle);
-            }
-            currentCandle = {
-                open: candle.open,
-                high: candle.high,
-                low: candle.low,
-                close: candle.close,
-                vBuy: candle.vBuy,
-                vSell: candle.vSell,
-                timestamp: candleTime
+            const aggregatedCandle = {
+                open: chunk[0].open,
+                high: Math.max(...chunk.map(c => c.high)),
+                low: Math.min(...chunk.map(c => c.low)),
+                close: chunk[chunk.length - 1].close,
+                vBuy: chunk.reduce((sum, c) => sum + c.vBuy, 0),
+                vSell: chunk.reduce((sum, c) => sum + c.vSell, 0),
+                timestamp: Math.floor(chunk[0].timestamp / tfMs) * tfMs,
             };
-            startTime = candleTime;
-        } else {
-            currentCandle.high = Math.max(currentCandle.high, candle.high);
-            currentCandle.low = Math.min(currentCandle.low, candle.low);
-            currentCandle.close = candle.close;
-            currentCandle.vBuy += candle.vBuy;
-            currentCandle.vSell += candle.vSell;
+
+            candlesAggregated.push(aggregatedCandle);
         }
-    });
 
-    if (currentCandle) {
-        aggregatedCandles.push(currentCandle);
+        // Log di debug per le prime 3 candele aggregate
+        if (GENERAL_CONFIG.debug && candlesAggregated.length > 0) {
+            console.log(chalk.gray('[DEBUG] Prime 3 candele aggregate:'));
+            candlesAggregated.slice(0, 3).forEach((candle, index) => {
+                console.log(chalk.gray(`Candela ${index + 1}: ${JSON.stringify({
+                    timestamp: new Date(candle.timestamp).toISOString(),
+                    open: candle.open,
+                    high: candle.high,
+                    low: candle.low,
+                    close: candle.close,
+                    vBuy: candle.vBuy,
+                    vSell: candle.vSell
+                }, null, 2)}`));
+            });
+        }
+
+        // Salva le candele aggregate
+        await fs.writeFile(targetPath, JSON.stringify(candlesAggregated, null, 2));
+        console.log(chalk.green(`Candele aggregate salvate in ${targetPath} (${candlesAggregated.length} candele)`));
+        console.log(chalk.yellow('***************************************************************************'));
+    } catch (error) {
+        console.error(chalk.red(`Errore nell'aggregazione delle candele: ${error.message}`));
+        throw error;
     }
-
-    // Salva candele aggregate
-    fs.writeFileSync(targetFile, JSON.stringify(aggregatedCandles, null, 2));
-    logger.info(`Aggregate ${aggregatedCandles.length} candele per ${timeframeMinutes}m, salvate in ${targetFile}`);
-
-    return aggregatedCandles;
-};
+}

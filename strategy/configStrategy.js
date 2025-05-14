@@ -1,55 +1,43 @@
-// ../strategy/configStrategy.js
+// strategy/configStrategy.js
+import chalk from 'chalk';
 
 // Strategy Configuration
 export const STRATEGY = {
-    chartTF: "3",      // TF della Chart
-    anchorPeriod: "5", // Timeframe per Volume Delta
-    initialAmount: "10000",
-    // Convert strings to numbers where used for calculations
+    chartTF: "3", // Timeframe del grafico in minuti (es. "3" per 3m)
+    anchorPeriod: "5", // Timeframe per Volume Delta in minuti
+    initialAmount: "10000", // Capitale iniziale per il backtest
     getChartTF: () => parseInt(STRATEGY.chartTF),
     getAnchorPeriod: () => parseInt(STRATEGY.anchorPeriod),
-    getInitialAmount: () => parseFloat(STRATEGY.initialAmount)
+    getInitialAmount: () => parseFloat(STRATEGY.initialAmount),
+    getChartTFSeconds: () => STRATEGY.getChartTF() * 60, // Converti in secondi
+    getAnchorPeriodSeconds: () => STRATEGY.getAnchorPeriod() * 60,
 };
 
 // General Configuration
 export const GENERAL_CONFIG = {
-    debug: false,
-    maxDistanceToLastBar: 100000,
+    debug: true, // Abilitato per log dettagliati
     entryMode: "FVGs",
     lowerTimeframe: "1",
     maxCVDS: 100,
-    // Add helper for timeframe conversion
-    getLowerTimeframe: () => parseInt(GENERAL_CONFIG.lowerTimeframe)
+    getLowerTimeframe: () => parseInt(GENERAL_CONFIG.lowerTimeframe),
+    getLowerTimeframeSeconds: () => GENERAL_CONFIG.getLowerTimeframe() * 60,
 };
 
 // FVG Configuration
 export const FVG_CONFIG = {
     enabled: true,
-    sensitivity: "Extreme", // "All", "Extreme", "High", "Normal", "Low"
-    showLastXFVGs: 2,
-    minimumFVGSize: 2,
-    minimumIFVGSize: 2,
-    overlapThresholdPercentage: 0,
-    extendZonesBy: 15,
-    extendZonesDynamic: true,
-    extendLastFVGs: true,
-    extendLastXFVGsCount: 20,
-    volumeBarsPlace: "Left", // "Left" or "Right" (retained for volumetric logic, not display)
-    mirrorVolumeBars: true,
-    startZoneFrom: "Last Bar", // "First Bar" or "Last Bar"
-    endMethod: "Close", // "Wick" or "Close"
-    filterMethod: "Average Range", // "Average Range" or "Volume Threshold"
-    barsType: "Same Type", // "Same Type" or "All"
-    combineFVGs: false,
-    allowGaps: false,
-    deleteUntouched: true,
-    deleteUntouchedAfterXBars: 200,
-    volumetricInfo: false,
-    volumeThresholdPercent: 50,
-    ifvgEnabled: false,
-    ifvgEndMethod: "Wick",
-    ifvgFull: true,
-    ifvgVolumetricInfo: false,
+    sensitivity: "Normal", // "All", "Extreme", "High", "Normal", "Low"
+    showLastXFVGs: 2, // Numero di FVG da mantenere in memoria
+    minimumFVGSize: 2, // Dimensione minima del FVG (in barre)
+    overlapThresholdPercentage: 0, // Percentuale di sovrapposizione per combinare FVG
+    endMethod: "Close", // Metodo di invalidazione ("Wick" o "Close")
+    filterMethod: "Average Range", // Metodo di filtro ("Average Range" o "Volume Threshold")
+    barsType: "Same Type", // Tipo di barre per FVG ("Same Type" o "All")
+    combineFVGs: false, // Combinare FVG sovrapposti
+    allowGaps: false, // Consentire gap tra barre
+    deleteUntouched: true, // Eliminare FVG non toccati
+    deleteUntouchedAfterXBars: 200, // Barre dopo cui eliminare FVG non toccati
+    volumeThresholdPercent: 50, // Soglia per filtro volume
     getFvgSensitivityValue: () => {
         switch (FVG_CONFIG.sensitivity) {
             case "All": return 100;
@@ -59,67 +47,65 @@ export const FVG_CONFIG = {
             case "Low": return 1;
             default: return 1.5;
         }
-    }
+    },
 };
 
 // CVD Configuration
 export const CVD_CONFIG = {
-    atrLen: 10,
-    atrLenCVDS: 50,
-    dynamicRR: 0.57,
-    // signalType: "Raw" // "Advanced" or "Raw"
+    atrLen: 10,         // Periodo per ATR (FVG)
+    atrLenCVDS: 50,     // Periodo per ATR (TP/SL)
+    dynamicRR: 0.57,    // Rapporto rischio/rendimento dinamico
 };
 
 // Risk Management Configuration
 export const RISK_CONFIG = {
-    tpslMethod: "Dynamic", // "Dynamic" or "Fixed"
+    tpslMethod: "Dynamic", // Solo "Dynamic" per ora
     riskAmount: "Normal", // "Highest", "High", "Normal", "Low", "Lowest"
-    customSLATRMult: 6.5,
-    getSLATRMult: (riskAmount, customSLATRMult) => {
-        return riskAmount === "Highest" ? 10 :
-               riskAmount === "High" ? 8.5 :
-               riskAmount === "Normal" ? 6.5 :
-               riskAmount === "Low" ? 5 :
-               riskAmount === "Lowest" ? 3 : customSLATRMult;
+    customSLATRMult: 6.5, // Moltiplicatore personalizzato per SL
+    getSLATRMult: () => {
+        return RISK_CONFIG.riskAmount === "Highest" ? 10 :
+               RISK_CONFIG.riskAmount === "High" ? 8.5 :
+               RISK_CONFIG.riskAmount === "Normal" ? 6.5 :
+               RISK_CONFIG.riskAmount === "Low" ? 5 :
+               RISK_CONFIG.riskAmount === "Lowest" ? 3 :
+               RISK_CONFIG.customSLATRMult;
     },
-    // tpPercent: 0.3, // Used for Fixed TP/SL
-    // slPercent: 0.4 // Used for Fixed TP/SL
 };
 
 // File Manager Configuration
 export const FILE_MANAGER_CONFIG = {
-    checkInterval: 10000, // 10 seconds in milliseconds
     sourceCandleFile: '../candles/candles_1m.json',
-    targetDataDir: '../strategy/data/',
-    targetCandleFile: 'candles_1m.json'
+    targetDataDir: './data/',
+    targetCandleFile: 'candles_1m.json',
 };
 
-// Add validation function
+// Funzione di validazione
 export const validateConfig = () => {
     const errors = [];
-    
-    // Validate timeframes
-    if (STRATEGY.getAnchorPeriod() <= STRATEGY.getChartTF()) {
-        errors.push('anchorPeriod deve essere maggiore di chartTF');
-    }
-    
+
+    // Validazione timeframes
     if (STRATEGY.getChartTF() <= GENERAL_CONFIG.getLowerTimeframe()) {
         errors.push('chartTF deve essere maggiore di lowerTimeframe');
     }
-    
-    // Validate FVG settings
+    if (STRATEGY.getAnchorPeriod() <= STRATEGY.getChartTF()) {
+        errors.push('anchorPeriod deve essere maggiore di chartTF');
+    }
+
+    // Validazione FVG
     if (!FVG_CONFIG.enabled && GENERAL_CONFIG.entryMode === "FVGs") {
         errors.push('FVG è disabilitato ma entryMode è impostato su FVGs');
     }
-    
-    // Validate risk settings
+
+    // Validazione rischio
     if (CVD_CONFIG.dynamicRR <= 0) {
         errors.push('dynamicRR deve essere maggiore di 0');
     }
-    
+
     if (errors.length > 0) {
-        throw new Error(`Configuration validation failed:\n${errors.join('\n')}`);
+        console.error(chalk.red(`Errore di validazione configurazione:\n${errors.join('\n')}`));
+        throw new Error('Configurazione non valida');
     }
-    
+
+    console.log(chalk.green('Configurazione valida'));
     return true;
 };

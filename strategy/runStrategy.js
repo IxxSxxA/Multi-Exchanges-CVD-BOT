@@ -1,153 +1,172 @@
-// ../strategy/runStrategy.js
-import fs from 'fs';
+// strategy/runStrategy.js
+import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { checkData, readCandles } from './checkData.js';
+import { watch } from 'fs';
+import chalk from 'chalk';
+import { initializeFileManager } from './fileManager.js';
 import { aggregateCandles } from './candleAggregator.js';
-import { Strategy } from './strategy.js';
-import { STRATEGY, FILE_MANAGER_CONFIG, validateConfig } from './configStrategy.js';
-import logger from './logger.js';
+import { executeStrategy } from './strategyLogic.js';
+import { FILE_MANAGER_CONFIG, STRATEGY, CVD_CONFIG, validateConfig } from './configStrategy.js';
 
-// Ottieni __dirname in ES Modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const runStrategy = async () => {
+// Funzione per leggere le candele
+async function readCandles(filePath) {
     try {
-        console.log('Starting strategy execution...');
-        console.log('sourceCandleFile:', FILE_MANAGER_CONFIG.sourceCandleFile);
-        console.log('targetDataDir:', FILE_MANAGER_CONFIG.targetDataDir);
-        console.log('targetCandleFile:', FILE_MANAGER_CONFIG.targetCandleFile);
-
-        // Validate configuration
-        validateConfig();
-        
-        logger.info('Running checkData...');
-        const { chartTFFile, anchorPeriodFile, targetFile } = await checkData();
-        logger.info('CheckData completed');
-
-        // Debug paths
-        logger.info('Files prepared:');
-        logger.info(`- Chart TF file: ${chartTFFile}`);
-        logger.info(`- Anchor period file: ${anchorPeriodFile}`);
-        logger.info(`- Target file: ${targetFile}`);
-
-        // Initialize strategy components
-        let chartTFCandles = await readCandles(chartTFFile);
-        let anchorPeriodCandles = await readCandles(anchorPeriodFile);
-        const strategy = new Strategy();
-        const backtestResults = [];
-
-        // Run initial backtest
-        if (chartTFCandles.length > 0) {
-            logger.info(`Starting backtest with ${chartTFCandles.length} candles`);
-            for (const [index, candle] of chartTFCandles.entries()) {
-                const result = await processCandle(strategy, candle, anchorPeriodCandles, index, 'backtest');
-                backtestResults.push(result);
-            }
-            logger.info('Backtest completed');
-        }
-
-        // Start continuous monitoring
-        logger.info('Starting live monitoring mode...');
-        let lastProcessedTime = chartTFCandles[chartTFCandles.length - 1]?.timestamp || 0;
-
-        // Use setInterval for continuous monitoring
-        setInterval(async () => {
-            try {
-                // Copy latest data
-                fs.copyFileSync(targetFile, targetFile); // Already handled by checkData
-                logger.debug('Updated candle data copied');
-
-                // Read and filter new candles
-                const newCandles = await readCandles(targetFile);
-                const newCandlesFiltered = newCandles.filter(c => c.timestamp > lastProcessedTime);
-
-                if (newCandlesFiltered.length > 0) {
-                    logger.info(`Processing ${newCandlesFiltered.length} new candles`);
-
-                    // Update aggregated timeframes
-                    await aggregateCandles(STRATEGY.getChartTF());
-                    await aggregateCandles(STRATEGY.getAnchorPeriod());
-
-                    // Reload aggregated candles
-                    chartTFCandles = await readCandles(chartTFFile);
-                    anchorPeriodCandles = await readCandles(anchorPeriodFile);
-
-                    // Process new candles
-                    for (const candle of newCandlesFiltered) {
-                        const result = await processCandle(strategy, candle, anchorPeriodCandles, null, 'live');
-                        if (result.trades.length > 0) {
-                            logger.info(`New trade: ${JSON.stringify(result.trades[0])}`);
-                        }
-                    }
-
-                    lastProcessedTime = newCandlesFiltered[newCandlesFiltered.length - 1].timestamp;
-                }
-            } catch (error) {
-                logger.error(`Live processing error: ${error.message}`);
-                // Don't throw here to keep the interval running
-            }
-        }, FILE_MANAGER_CONFIG.checkInterval);
-
+        const data = await fs.readFile(filePath, 'utf-8');
+        return JSON.parse(data);
     } catch (error) {
-        logger.error(`Strategy execution failed: ${error.stack}`);
-        process.exit(1);
+        console.error(chalk.red(`Errore nella lettura di ${filePath}: ${error.message}`));
+        return [];
     }
-};
-
-const runBacktest = async (strategy, chartTFCandles, anchorPeriodCandles, results) => {
-    logger.info(`Starting backtest with ${chartTFCandles.length} candles`);
-    
-    for (const [index, candle] of chartTFCandles.entries()) {
-        const result = await processCandle(strategy, candle, anchorPeriodCandles, index, 'backtest');
-        results.push(result);
-    }
-    
-    await saveBacktestResults(results);
-};
-
-const runLiveTrading = async (strategy, chartTFCandles, anchorPeriodCandles, targetFile, chartTFFile, anchorPeriodFile, checkInterval) => {
-    logger.info('Switching to live mode...');
-    let lastProcessedTimestamp = getLastProcessedTimestamp(chartTFCandles);
-
-    return setInterval(async () => {
-        try {
-            const newCandles = await loadAndFilterNewCandles(targetFile, lastProcessedTimestamp);
-            if (newCandles.length === 0) return;
-
-            const updatedCandles = await updateAggregatedCandles(newCandles, chartTFFile, anchorPeriodFile);
-            await processNewCandles(strategy, updatedCandles, lastProcessedTimestamp);
-            
-            lastProcessedTimestamp = getLastProcessedTimestamp(updatedCandles.chartTFCandles);
-        } catch (error) {
-            logger.error(`Live trading error: ${error.message}`);
-        }
-    }, checkInterval);
-};
-
-async function processCandle(strategy, candle, anchorCandles, index, mode) {
-    logger.debug(`Processing ${mode} candle ${index}: ${JSON.stringify(candle)}`);
-    
-    const result = await strategy.processCandles(candle, anchorCandles);
-    
-    if (result?.trades?.length > 0) {
-        await saveTrade(result.trades[result.trades.length - 1], mode);
-    }
-    
-    return {
-        timestamp: candle.timestamp,
-        state: result?.state || 'unknown',
-        balance: result?.balance || 0,
-        position: result?.position || null,
-        trades: result?.trades?.slice(-1) || []
-    };
 }
 
-// Execute the async function
-runStrategy().catch(error => {
-    console.error('Fatal error:', error);
+// Funzione per salvare un trade in trades.json
+async function saveTrade(trade) {
+    const tradesPath = path.resolve(FILE_MANAGER_CONFIG.targetDataDir, 'trades.json');
+    let trades = [];
+    try {
+        const data = await fs.readFile(tradesPath, 'utf-8');
+        trades = JSON.parse(data);
+    } catch (error) {
+        // File non esiste o vuoto, inizializziamo array vuoto
+        console.log(chalk.cyan(`[INFO] Creazione nuovo file ${tradesPath}`));
+    }
+    trades.push(trade);
+    await fs.writeFile(tradesPath, JSON.stringify(trades, null, 2));
+    console.log(chalk.gray(`[DEBUG] Trade salvato in ${tradesPath}`));
+}
+
+// Funzione per eseguire il backtest
+async function runBacktest(candles) {
+    console.log(chalk.yellow(`Avvio backtest con ${candles.length} candele...`));
+    const cvdsList = [];
+    let balance = STRATEGY.getInitialAmount();
+    let trades = 0;
+    let wins = 0;
+
+    for (let i = Math.max(1, CVD_CONFIG.atrLenCVDS); i < candles.length; i++) {
+
+        const candle = candles[i];
+        const prevCandles = candles.slice(0, i);
+        const { buyAlertTick, sellAlertTick, tpAlertTick, slAlertTick, cvdsList: updatedCvdsList } = executeStrategy(candle, prevCandles, cvdsList);
+
+        // Aggiorna il bilancio e statistiche
+        if (tpAlertTick || slAlertTick) {
+            const lastCVDS = cvdsList[0];
+            const profit = lastCVDS.entryType === 'Long'
+                ? (lastCVDS.exitPrice - lastCVDS.entryPrice)
+                : (lastCVDS.entryPrice - lastCVDS.exitPrice);
+            balance += profit;
+            trades++;
+            if (tpAlertTick) wins++;
+            console.log(chalk.cyan(`Trade #${trades}: ${lastCVDS.entryType} chiuso con profitto ${profit.toFixed(2)}. Bilancio: ${balance.toFixed(2)}`));
+
+            // Salva il trade
+            const trade = {
+                tradeNumber: trades,
+                entryType: lastCVDS.entryType,
+                entryPrice: lastCVDS.entryPrice,
+                entryTime: new Date(lastCVDS.entryTime).toISOString(),
+                exitPrice: lastCVDS.exitPrice,
+                exitTime: new Date(lastCVDS.exitTime).toISOString(),
+                profit: profit,
+                outcome: tpAlertTick ? 'Take Profit' : 'Stop Loss',
+            };
+            await saveTrade(trade);
+        }
+
+        // Log segnali
+        if (buyAlertTick) console.log(chalk.green(`Segnale Buy @ ${new Date(candle.timestamp).toISOString()}`));
+        if (sellAlertTick) console.log(chalk.green(`Segnale Sell @ ${new Date(candle.timestamp).toISOString()}`));
+        if (tpAlertTick) console.log(chalk.blue(`Segnale TP @ ${new Date(candle.timestamp).toISOString()}`));
+        if (slAlertTick) console.log(chalk.red(`Segnale SL @ ${new Date(candle.timestamp).toISOString()}`));
+    }
+
+    // Report finale
+    const winRate = trades > 0 ? (wins / trades * 100).toFixed(2) : 0;
+    console.log(chalk.green(`Backtest completato.`));
+    console.log(chalk.cyan(`- Bilancio finale: ${balance.toFixed(2)}`));
+    console.log(chalk.cyan(`- Trade totali: ${trades}`));
+    console.log(chalk.cyan(`- Trade vincenti: ${wins}`));
+    console.log(chalk.cyan(`- Win rate: ${winRate}%`));
+}
+
+// Funzione principale
+async function runStrategy() {
+
+    console.log(chalk.yellow('***************************************************************************'));
+    console.log(chalk.yellow('************************ Avvio della strategia CVD ************************'));
+    console.log(chalk.yellow('***************************************************************************'));
+    console.log('');
+
+    // Valida la configurazione
+    try {
+        validateConfig();
+        console.log(chalk.green('Configurazione validata con successo.'));
+    } catch (error) {
+        console.error(chalk.red(`Errore di configurazione: ${error.message}`));
+        process.exit(1);
+    }
+
+    // Inizializza il file manager
+    await initializeFileManager();
+
+    // Aggrega le candele al timeframe desiderato
+    const chartTF = STRATEGY.getChartTF();
+    const sourceCandlePath = path.resolve(FILE_MANAGER_CONFIG.targetDataDir, FILE_MANAGER_CONFIG.targetCandleFile);
+    const targetCandlePath = path.resolve(FILE_MANAGER_CONFIG.targetDataDir, `candles_${chartTF}m.json`);
+    await aggregateCandles(sourceCandlePath, targetCandlePath, chartTF);
+
+    // Verifica le candele disponibili
+    const candles = await readCandles(targetCandlePath);
+    const minCandlesForBacktest = 100;
+
+    if (candles.length >= minCandlesForBacktest) {
+        await runBacktest(candles);
+    } else {
+        console.log(chalk.yellow(`Candele insufficienti (${candles.length}/${minCandlesForBacktest}). Passaggio a modalità live...`));
+    }
+
+    // Modalità live: monitora nuove candele
+    console.log(chalk.cyan(`Avvio modalità live su ${targetCandlePath}...`));
+    const cvdsList = [];
+    watch(targetCandlePath, async (eventType) => {
+        if (eventType === 'change') {
+            console.log(chalk.blue(`Modifica rilevata in ${targetCandlePath}. Elaborazione nuova candela...`));
+            const updatedCandles = await readCandles(targetCandlePath);
+            if (updatedCandles.length > 0) {
+                const latestCandle = updatedCandles[updatedCandles.length - 1];
+                const prevCandles = updatedCandles.slice(0, -1);
+                const { buyAlertTick, sellAlertTick, tpAlertTick, slAlertTick } = executeStrategy(latestCandle, prevCandles, cvdsList);
+
+                if (buyAlertTick) console.log(chalk.green(`Segnale Buy @ ${new Date(latestCandle.timestamp).toISOString()}`));
+                if (sellAlertTick) console.log(chalk.green(`Segnale Sell @ ${new Date(latestCandle.timestamp).toISOString()}`));
+                if (tpAlertTick) console.log(chalk.blue(`Segnale TP @ ${new Date(latestCandle.timestamp).toISOString()}`));
+                if (slAlertTick) console.log(chalk.red(`Segnale SL @ ${new Date(latestCandle.timestamp).toISOString()}`));
+
+                // Salva il trade in modalità live
+                if (tpAlertTick || slAlertTick) {
+                    const lastCVDS = cvdsList[0];
+                    const profit = lastCVDS.entryType === 'Long'
+                        ? (lastCVDS.exitPrice - lastCVDS.entryPrice)
+                        : (lastCVDS.entryPrice - lastCVDS.exitPrice);
+                    const trade = {
+                        tradeNumber: trades + 1,
+                        entryType: lastCVDS.entryType,
+                        entryPrice: lastCVDS.entryPrice,
+                        entryTime: new Date(lastCVDS.entryTime).toISOString(),
+                        exitPrice: lastCVDS.exitPrice,
+                        exitTime: new Date(lastCVDS.exitTime).toISOString(),
+                        profit: profit,
+                        outcome: tpAlertTick ? 'Take Profit' : 'Stop Loss',
+                    };
+                    await saveTrade(trade);
+                }
+            }
+        }
+    });
+}
+
+runStrategy().catch((error) => {
+    console.error(chalk.red(`Errore nell'esecuzione della strategia: ${error.message}`));
     process.exit(1);
 });
-
-export default runStrategy;

@@ -1,0 +1,382 @@
+[
+  {
+    "tradeNumber": 1,
+    "entryType": "Short",
+    "entryPrice": 96956,
+    "entryTime": "2025-05-02T04:48:00.000Z",
+    "exitPrice": 96686.80211,
+    "exitTime": "2025-05-02T05:51:00.000Z",
+    "profit": 269.1978899999958,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 2,
+    "entryType": "Short",
+    "entryPrice": 96581.3,
+    "entryTime": "2025-05-02T06:00:00.000Z",
+    "exitPrice": 96320.89778,
+    "exitTime": "2025-05-02T07:36:00.000Z",
+    "profit": 260.4022200000036,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 3,
+    "entryType": "Long",
+    "entryPrice": 96465,
+    "entryTime": "2025-05-02T07:42:00.000Z",
+    "exitPrice": 96760.47375,
+    "exitTime": "2025-05-02T10:15:00.000Z",
+    "profit": 295.47375000000466,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 4,
+    "entryType": "Short",
+    "entryPrice": 96796.9,
+    "entryTime": "2025-05-02T10:18:00.000Z",
+    "exitPrice": 97232.777,
+    "exitTime": "2025-05-02T14:33:00.000Z",
+    "profit": -435.8770000000077,
+    "outcome": "Stop Loss"
+  },
+  {
+    "tradeNumber": 1,
+    "entryType": "Long",
+    "entryPrice": 96857.4,
+    "entryTime": "2025-05-02T04:45:00.000Z",
+    "exitPrice": 96380.17,
+    "exitTime": "2025-05-02T07:09:00.000Z",
+    "profit": -477.2299999999959,
+    "outcome": "Stop Loss"
+  },
+  {
+    "tradeNumber": 2,
+    "entryType": "Short",
+    "entryPrice": 96465,
+    "entryTime": "2025-05-02T07:42:00.000Z",
+    "exitPrice": 96983.375,
+    "exitTime": "2025-05-02T11:21:00.000Z",
+    "profit": -518.375,
+    "outcome": "Stop Loss"
+  },
+  {
+    "tradeNumber": 3,
+    "entryType": "Long",
+    "entryPrice": 96958,
+    "entryTime": "2025-05-02T11:24:00.000Z",
+    "exitPrice": 97199.21773,
+    "exitTime": "2025-05-02T13:00:00.000Z",
+    "profit": 241.21773000000394,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 4,
+    "entryType": "Short",
+    "entryPrice": 97100.1,
+    "entryTime": "2025-05-02T13:03:00.000Z",
+    "exitPrice": 96772.63728000001,
+    "exitTime": "2025-05-02T13:12:00.000Z",
+    "profit": 327.4627199999959,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 5,
+    "entryType": "Short",
+    "entryPrice": 96810,
+    "entryTime": "2025-05-02T13:18:00.000Z",
+    "exitPrice": 97415.644,
+    "exitTime": "2025-05-02T14:36:00.000Z",
+    "profit": -605.6440000000002,
+    "outcome": "Stop Loss"
+  },
+  {
+    "tradeNumber": 1,
+    "entryType": "Short",
+    "entryPrice": 96857.4,
+    "entryTime": "2025-05-02T04:45:00.000Z",
+    "exitPrice": 96585.3789,
+    "exitTime": "2025-05-02T05:54:00.000Z",
+    "profit": 272.0210999999981,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 2,
+    "entryType": "Long",
+    "entryPrice": 96703.9,
+    "entryTime": "2025-05-02T06:06:00.000Z",
+    "exitPrice": 96959.73025,
+    "exitTime": "2025-05-02T11:03:00.000Z",
+    "profit": 255.83024999999907,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 3,
+    "entryType": "Long",
+    "entryPrice": 96958,
+    "entryTime": "2025-05-02T11:24:00.000Z",
+    "exitPrice": 97199.21773,
+    "exitTime": "2025-05-02T13:00:00.000Z",
+    "profit": 241.21773000000394,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 4,
+    "entryType": "Short",
+    "entryPrice": 96754.8,
+    "entryTime": "2025-05-02T13:39:00.000Z",
+    "exitPrice": 97413.614,
+    "exitTime": "2025-05-02T14:36:00.000Z",
+    "profit": -658.8139999999985,
+    "outcome": "Stop Loss"
+  },
+  {
+    "tradeNumber": 1,
+    "entryType": "Short",
+    "entryPrice": 96906,
+    "entryTime": "2025-05-02T04:39:00.000Z",
+    "exitPrice": 96633.05265,
+    "exitTime": "2025-05-02T05:51:00.000Z",
+    "profit": 272.9473500000022,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 2,
+    "entryType": "Long",
+    "entryPrice": 96651.3,
+    "entryTime": "2025-05-02T05:57:00.000Z",
+    "exitPrice": 96911.06496,
+    "exitTime": "2025-05-02T11:00:00.000Z",
+    "profit": 259.7649600000004,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 3,
+    "entryType": "Short",
+    "entryPrice": 96952.2,
+    "entryTime": "2025-05-02T11:03:00.000Z",
+    "exitPrice": 96703.69082999999,
+    "exitTime": "2025-05-02T12:33:00.000Z",
+    "profit": 248.50917000000481,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 4,
+    "entryType": "Short",
+    "entryPrice": 96870.1,
+    "entryTime": "2025-05-02T12:36:00.000Z",
+    "exitPrice": 97360.31700000001,
+    "exitTime": "2025-05-02T14:33:00.000Z",
+    "profit": -490.2170000000042,
+    "outcome": "Stop Loss"
+  },
+  {
+    "tradeNumber": 1,
+    "entryType": "Long",
+    "entryPrice": 96886.6,
+    "entryTime": "2025-05-02T04:42:00.000Z",
+    "exitPrice": 96407.73200000002,
+    "exitTime": "2025-05-02T07:09:00.000Z",
+    "profit": -478.86799999998766,
+    "outcome": "Stop Loss"
+  },
+  {
+    "tradeNumber": 2,
+    "entryType": "Short",
+    "entryPrice": 96675.3,
+    "entryTime": "2025-05-02T07:18:00.000Z",
+    "exitPrice": 96397.36572,
+    "exitTime": "2025-05-02T07:36:00.000Z",
+    "profit": 277.9342800000013,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 3,
+    "entryType": "Long",
+    "entryPrice": 96365.3,
+    "entryTime": "2025-05-02T07:39:00.000Z",
+    "exitPrice": 96658.4396,
+    "exitTime": "2025-05-02T08:39:00.000Z",
+    "profit": 293.13959999999497,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 4,
+    "entryType": "Short",
+    "entryPrice": 96630.5,
+    "entryTime": "2025-05-02T08:48:00.000Z",
+    "exitPrice": 97174.19900000001,
+    "exitTime": "2025-05-02T13:00:00.000Z",
+    "profit": -543.6990000000078,
+    "outcome": "Stop Loss"
+  },
+  {
+    "tradeNumber": 5,
+    "entryType": "Short",
+    "entryPrice": 96810,
+    "entryTime": "2025-05-02T13:18:00.000Z",
+    "exitPrice": 97415.644,
+    "exitTime": "2025-05-02T14:36:00.000Z",
+    "profit": -605.6440000000002,
+    "outcome": "Stop Loss"
+  },
+  {
+    "tradeNumber": 1,
+    "entryType": "Long",
+    "entryPrice": 96906,
+    "entryTime": "2025-05-02T04:39:00.000Z",
+    "exitPrice": 96427.145,
+    "exitTime": "2025-05-02T07:09:00.000Z",
+    "profit": -478.8549999999959,
+    "outcome": "Stop Loss"
+  },
+  {
+    "tradeNumber": 2,
+    "entryType": "Long",
+    "entryPrice": 96494.1,
+    "entryTime": "2025-05-02T07:12:00.000Z",
+    "exitPrice": 96758.42211,
+    "exitTime": "2025-05-02T10:15:00.000Z",
+    "profit": 264.3221099999937,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 3,
+    "entryType": "Long",
+    "entryPrice": 96796.9,
+    "entryTime": "2025-05-02T10:18:00.000Z",
+    "exitPrice": 97045.34989,
+    "exitTime": "2025-05-02T11:24:00.000Z",
+    "profit": 248.4498900000035,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 4,
+    "entryType": "Short",
+    "entryPrice": 96893.4,
+    "entryTime": "2025-05-02T11:27:00.000Z",
+    "exitPrice": 96651.00407999998,
+    "exitTime": "2025-05-02T12:33:00.000Z",
+    "profit": 242.39592000000994,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 5,
+    "entryType": "Long",
+    "entryPrice": 96858,
+    "entryTime": "2025-05-02T12:39:00.000Z",
+    "exitPrice": 97154.80014,
+    "exitTime": "2025-05-02T13:00:00.000Z",
+    "profit": 296.80014000000665,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 6,
+    "entryType": "Long",
+    "entryPrice": 96847.9,
+    "entryTime": "2025-05-02T13:21:00.000Z",
+    "exitPrice": 97196.38488999999,
+    "exitTime": "2025-05-02T14:30:00.000Z",
+    "profit": 348.48488999999245,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 1,
+    "entryType": "Short",
+    "entryPrice": 96886.6,
+    "entryTime": "2025-05-02T04:42:00.000Z",
+    "exitPrice": 96613.64524000001,
+    "exitTime": "2025-05-02T05:54:00.000Z",
+    "profit": 272.95475999999326,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 2,
+    "entryType": "Short",
+    "entryPrice": 96580.5,
+    "entryTime": "2025-05-02T06:03:00.000Z",
+    "exitPrice": 96322.64682000001,
+    "exitTime": "2025-05-02T07:36:00.000Z",
+    "profit": 257.85317999999097,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 3,
+    "entryType": "Long",
+    "entryPrice": 96551.5,
+    "entryTime": "2025-05-02T08:24:00.000Z",
+    "exitPrice": 96858.23694999999,
+    "exitTime": "2025-05-02T10:21:00.000Z",
+    "profit": 306.73694999999134,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 4,
+    "entryType": "Short",
+    "entryPrice": 96757.3,
+    "entryTime": "2025-05-02T10:54:00.000Z",
+    "exitPrice": 97189.44600000001,
+    "exitTime": "2025-05-02T13:00:00.000Z",
+    "profit": -432.1460000000079,
+    "outcome": "Stop Loss"
+  },
+  {
+    "tradeNumber": 5,
+    "entryType": "Long",
+    "entryPrice": 96727.1,
+    "entryTime": "2025-05-02T13:12:00.000Z",
+    "exitPrice": 97065.26276,
+    "exitTime": "2025-05-02T14:03:00.000Z",
+    "profit": 338.162759999992,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 6,
+    "entryType": "Long",
+    "entryPrice": 97326.2,
+    "entryTime": "2025-05-02T14:33:00.000Z",
+    "exitPrice": 97825.10048,
+    "exitTime": "2025-05-02T14:57:00.000Z",
+    "profit": 498.9004799999966,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 1,
+    "entryType": "Long",
+    "entryPrice": 96857.4,
+    "entryTime": "2025-05-02T04:45:00.000Z",
+    "exitPrice": 96380.17,
+    "exitTime": "2025-05-02T07:09:00.000Z",
+    "profit": -477.2299999999959,
+    "outcome": "Stop Loss"
+  },
+  {
+    "tradeNumber": 2,
+    "entryType": "Long",
+    "entryPrice": 96600,
+    "entryTime": "2025-05-02T07:15:00.000Z",
+    "exitPrice": 96867.06380999999,
+    "exitTime": "2025-05-02T10:45:00.000Z",
+    "profit": 267.0638099999924,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 3,
+    "entryType": "Short",
+    "entryPrice": 96925.1,
+    "entryTime": "2025-05-02T11:00:00.000Z",
+    "exitPrice": 96677.34664999999,
+    "exitTime": "2025-05-02T12:33:00.000Z",
+    "profit": 247.7533500000136,
+    "outcome": "Take Profit"
+  },
+  {
+    "tradeNumber": 4,
+    "entryType": "Short",
+    "entryPrice": 96740.1,
+    "entryTime": "2025-05-02T13:15:00.000Z",
+    "exitPrice": 97344.717,
+    "exitTime": "2025-05-02T14:33:00.000Z",
+    "profit": -604.6169999999984,
+    "outcome": "Stop Loss"
+  }
+]
