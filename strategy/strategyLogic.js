@@ -5,20 +5,6 @@ import { getCVDSignals } from './cvd.js';
 import { detectFVG } from './fvg.js';
 import { calculateATR } from './atr.js';
 
-
-// Funzione per stampare la candela corrente
-function logCandle(candle) {
-    console.log(
-        chalk.cyan(`[CANDLE] ${new Date(candle.timestamp).toISOString()}`) +
-        chalk.yellow(` O: ${candle.open.toFixed(2)}`) +
-        chalk.yellow(` H: ${candle.high.toFixed(2)}`) +
-        chalk.yellow(` L: ${candle.low.toFixed(2)}`) +
-        chalk.yellow(` C: ${candle.close.toFixed(2)}`) +
-        chalk.green(` vBuy: ${candle.vBuy.toFixed(2)}`) +
-        chalk.red(` vSell: ${candle.vSell.toFixed(2)}`)
-    );
-}
-
 // Definizione della classe CVDS
 class CVDS {
     constructor() {
@@ -40,6 +26,19 @@ class CVDS {
     }
 }
 
+// Funzione per stampare la candela corrente
+function logCandle(candle) {
+    console.log(
+        chalk.cyan(`[CANDLE] ${new Date(candle.timestamp).toISOString()}`) +
+        chalk.yellow(` O: ${candle.open.toFixed(2)}`) +
+        chalk.yellow(` H: ${candle.high.toFixed(2)}`) +
+        chalk.yellow(` L: ${candle.low.toFixed(2)}`) +
+        chalk.yellow(` C: ${candle.close.toFixed(2)}`) +
+        chalk.green(` vBuy: ${candle.vBuy.toFixed(2)}`) +
+        chalk.red(` vSell: ${candle.vSell.toFixed(2)}`)
+    );
+}
+
 // Funzione per segnali CVD
 function getCVDSignalsWrapper(candle, prevCandles) {
     const signals = getCVDSignals(candle, prevCandles);
@@ -53,16 +52,33 @@ function getCVDSignalsWrapper(candle, prevCandles) {
 function detectFVGWrapper(candle, prevCandles) {
     const fvg = detectFVG(candle, prevCandles);
     if (GENERAL_CONFIG.debug && (fvg.bullishFVG || fvg.bearishFVG)) {
+        // Calcola ATR corto per filtrare FVG
+        const atrShort = calculateATR(prevCandles, FVG_CONFIG.atrLen);
+        console.log(chalk.gray(`[DEBUG] ATR corto: ${atrShort.toFixed(2)} (periodi: ${FVG_CONFIG.atrLen})`));
+        const fvgSize = fvg.bullishFVG ? (fvg.bullishFVG.max - fvg.bullishFVG.min) : (fvg.bearishFVG ? (fvg.bearishFVG.max - fvg.bearishFVG.min) : 0);
+        if (fvgSize < atrShort) {
+            console.log(chalk.yellow(`[DEBUG] FVG scartato: dimensione ${fvgSize.toFixed(2)} < ATR corto ${atrShort.toFixed(2)}`));
+            return { bullishFVG: null, bearishFVG: null };
+        }
         console.log(chalk.gray(`[DEBUG] FVG rilevato: ${JSON.stringify(fvg)}`));
     }
     return fvg;
 }
 
-// Funzione per calcolare ATR
+// Funzione per calcolare ATR (wrapper principale)
 function calculateATRWrapper(candles, atrLen) {
     const atr = calculateATR(candles, atrLen);
     if (GENERAL_CONFIG.debug) {
-        console.log(chalk.gray(`[DEBUG] ATR calcolato: ${atr.toFixed(2)}`));
+        console.log(chalk.gray(`[DEBUG] ATR calcolato: ${atr.toFixed(2)} (periodi: ${atrLen})`));
+    }
+    return atr;
+}
+
+// Funzione di test per verificare ATR con atrLenCVDS
+function calculateATRcvds(candles, atrLenCVDS) {
+    const atr = calculateATR(candles, atrLenCVDS);
+    if (GENERAL_CONFIG.debug) {
+        console.log(chalk.gray(`[DEBUG] ATR di test: ${atr.toFixed(2)} (periodi: ${atrLenCVDS}) in strategyLogic`));
     }
     return atr;
 }
@@ -86,14 +102,10 @@ function calculateTPSL(entryPrice, atrCVDS, isLong) {
 
 // Funzione principale per eseguire la strategia
 export function executeStrategy(candle, prevCandles, cvdsList = []) {
-
-     // Stampa la candela corrente se debug è attivo
+    // Stampa la candela corrente se debug è attivo
     if (GENERAL_CONFIG.debug) {
         logCandle(candle);
     }
-
-
-
 
     let lastCVDS = cvdsList.length > 0 ? cvdsList[0] : null;
     let buyAlertTick = false;
@@ -156,6 +168,14 @@ export function executeStrategy(candle, prevCandles, cvdsList = []) {
 
         // Calcola ATR per TP/SL
         const atrCVDS = calculateATRWrapper(prevCandles, CVD_CONFIG.atrLenCVDS);
+        // Test: Calcola ATR con la funzione di verifica
+        if (GENERAL_CONFIG.debug) {
+            const atrTest = calculateATRcvds(prevCandles, CVD_CONFIG.atrLenCVDS);
+            console.log(chalk.gray(`[DEBUG] Confronto ATR: principale=${atrCVDS.toFixed(2)}, test=${atrTest.toFixed(2)}`));
+            // Test con un altro periodo (es. FVG_CONFIG.atrLen)
+            const atrOther = calculateATRcvds(prevCandles, FVG_CONFIG.atrLen);
+            console.log(chalk.gray(`[DEBUG] ATR con altro periodo: ${atrOther.toFixed(2)} (periodi: ${FVG_CONFIG.atrLen})`));
+        }
         const { slTarget, tpTarget } = calculateTPSL(lastCVDS.entryPrice, atrCVDS, lastCVDS.entryType === 'Long');
 
         lastCVDS.slTarget = slTarget;

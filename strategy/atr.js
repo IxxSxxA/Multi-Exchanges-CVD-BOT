@@ -3,16 +3,16 @@ import chalk from 'chalk';
 import { GENERAL_CONFIG } from './configStrategy.js';
 
 // Calcolo dell'ATR (Average True Range)
-export function calculateATR(candles, atrLen) {
-    if (!Array.isArray(candles) || candles.length < atrLen) {
+export function calculateATR(candles, period) {
+    if (!Array.isArray(candles) || candles.length < period) {
         if (GENERAL_CONFIG.debug) {
-            console.log(chalk.yellow(`[DEBUG] Candele insufficienti per ATR: ${candles.length}/${atrLen}`));
+            console.log(chalk.yellow(`[DEBUG] Candele insufficienti per ATR: ${candles.length}/${period}`));
         }
         return 0;
     }
 
-    // Usa solo le ultime atrLen candele
-    const recentCandles = candles.slice(-atrLen);
+    // Usa solo le ultime period candele
+    const recentCandles = candles.slice(-period);
 
     // Calcola il True Range (TR) per ogni candela
     const trueRanges = recentCandles.map((candle, index) => {
@@ -26,10 +26,10 @@ export function calculateATR(candles, atrLen) {
     });
 
     // Calcola la media dei TR
-    const atr = trueRanges.reduce((sum, tr) => sum + tr, 0) / atrLen;
+    const atr = trueRanges.reduce((sum, tr) => sum + tr, 0) / period;
 
     if (GENERAL_CONFIG.debug) {
-        console.log(chalk.gray(`[DEBUG] ATR calcolato: ${atr.toFixed(2)} (periodi: ${atrLen})`));
+        console.log(chalk.gray(`[DEBUG] ATR calcolato: ${atr.toFixed(2)} (periodi: ${period}) in atr.js`));
     }
 
     return atr;
