@@ -28,16 +28,17 @@ async function saveTrade(trade) {
         trades = JSON.parse(data);
     } catch (error) {
         // File non esiste o vuoto, inizializziamo array vuoto
-        console.log(chalk.cyan(`[INFO] Creazione nuovo file ${tradesPath}`));
+        console.log(chalk.cyan(`[RUN STRATEGY] [INFO] Creazione nuovo file ${tradesPath}`));
     }
     trades.push(trade);
     await fs.writeFile(tradesPath, JSON.stringify(trades, null, 2));
-    console.log(chalk.gray(`[DEBUG] Trade salvato in ${tradesPath}`));
+    console.log(chalk.cyan(`[RUN STRATEGY] Trade salvato in ${tradesPath}`));
+    
 }
 
 // Funzione per eseguire il backtest
 async function runBacktest(candles) {
-    console.log(chalk.yellow(`Avvio backtest con ${candles.length} candele...`));
+    console.log(chalk.yellow(`[RUN STRATEGY] Avvio backtest con ${candles.length} candele...`));
     const cvdsList = [];
     let balance = STRATEGY.getInitialAmount();
     let trades = 0;
@@ -58,7 +59,22 @@ async function runBacktest(candles) {
             balance += profit;
             trades++;
             if (tpAlertTick) wins++;
-            console.log(chalk.cyan(`Trade #${trades}: ${lastCVDS.entryType} chiuso con profitto ${profit.toFixed(2)}. Bilancio: ${balance.toFixed(2)}`));
+            console.log(chalk.cyan(`[RUN STRATEGY] Trade #${trades} ${lastCVDS.entryType} chiuso PNL @ (${profit.toFixed(2)}) -> New Balance ${balance.toFixed(2)}`));
+
+
+
+
+            // console.log(chalk.cyan(`[RUN STRATEGY] Trade #${trades}: ${lastCVDS.entryType} chiuso con profitto ${profit.toFixed(2)}. Bilancio: ${balance.toFixed(2)}`));
+
+/*          LOG A VIDEO DEL TRADE // NON NECESSARIO GIA' GESTITO IN strategyLogic
+
+            if (tpAlertTick) {
+                wins++;
+                console.log(chalk.cyan(`[RUN STRATEGY] Trade #${trades}: ${lastCVDS.entryType} chiuso in TAKE PROFIT (${profit.toFixed(2)}). Bilancio: ${balance.toFixed(2)}`));
+            } else if (slAlertTick) {
+                console.log(chalk.red(`[RUN STRATEGY] Trade #${trades}: ${lastCVDS.entryType} chiuso in STOP LOSS (${profit.toFixed(2)}). Bilancio: ${balance.toFixed(2)}`));
+            }
+*/
 
             // Salva il trade
             const trade = {
@@ -74,16 +90,18 @@ async function runBacktest(candles) {
             await saveTrade(trade);
         }
 
-        // Log segnali
-        if (buyAlertTick) console.log(chalk.green(`Segnale Buy @ ${new Date(candle.timestamp).toISOString()}`));
-        if (sellAlertTick) console.log(chalk.green(`Segnale Sell @ ${new Date(candle.timestamp).toISOString()}`));
-        if (tpAlertTick) console.log(chalk.blue(`Segnale TP @ ${new Date(candle.timestamp).toISOString()}`));
-        if (slAlertTick) console.log(chalk.red(`Segnale SL @ ${new Date(candle.timestamp).toISOString()}`));
+/*         // Log Segnale
+        if (buyAlertTick) console.log(chalk.green(`[RUN STRATEGY] Segnale Buy @ ${new Date(candle.timestamp).toISOString()}`));
+        if (sellAlertTick) console.log(chalk.green(`[RUN STRATEGY] Segnale Sell @ ${new Date(candle.timestamp).toISOString()}`));
+        if (tpAlertTick) console.log(chalk.blue(`[RUN STRATEGY] Segnale TP @ ${new Date(candle.timestamp).toISOString()}`));
+        if (slAlertTick) console.log(chalk.red(`[RUN STRATEGY] Segnale SL @ ${new Date(candle.timestamp).toISOString()}`));
+     */
+    
     }
 
     // Report finale
     const winRate = trades > 0 ? (wins / trades * 100).toFixed(2) : 0;
-    console.log(chalk.green(`Backtest completato.`));
+    console.log(chalk.cyan(`[RUN STRATEGY] Backtest completato.`));
     console.log(chalk.cyan(`- Bilancio finale: ${balance.toFixed(2)}`));
     console.log(chalk.cyan(`- Trade totali: ${trades}`));
     console.log(chalk.cyan(`- Trade vincenti: ${wins}`));
@@ -138,10 +156,12 @@ async function runStrategy() {
                 const prevCandles = updatedCandles.slice(0, -1);
                 const { buyAlertTick, sellAlertTick, tpAlertTick, slAlertTick } = executeStrategy(latestCandle, prevCandles, cvdsList);
 
+/*
                 if (buyAlertTick) console.log(chalk.green(`Segnale Buy @ ${new Date(latestCandle.timestamp).toISOString()}`));
                 if (sellAlertTick) console.log(chalk.green(`Segnale Sell @ ${new Date(latestCandle.timestamp).toISOString()}`));
                 if (tpAlertTick) console.log(chalk.blue(`Segnale TP @ ${new Date(latestCandle.timestamp).toISOString()}`));
                 if (slAlertTick) console.log(chalk.red(`Segnale SL @ ${new Date(latestCandle.timestamp).toISOString()}`));
+ */
 
                 // Salva il trade in modalità live
                 if (tpAlertTick || slAlertTick) {

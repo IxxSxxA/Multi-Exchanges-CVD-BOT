@@ -1,5 +1,11 @@
 // strategy/configStrategy.js
 import chalk from 'chalk';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = path.resolve(__dirname, '..'); // root del progetto
+
 
 // Strategy Configuration
 export const STRATEGY = {
@@ -52,8 +58,8 @@ export const FVG_CONFIG = {
 
 // CVD Configuration
 export const CVD_CONFIG = {
-    atrLen: 10,         // Periodo per ATR (FVG)
-    atrLenCVDS: 50,     // Periodo per ATR (TP/SL)
+    atrLen: 10,         // Periodo ATR per FVG
+    atrLenCVDS: 50,     // Periodo ATR per TP/SL
     dynamicRR: 0.57,    // Rapporto rischio/rendimento dinamico
 };
 
@@ -73,9 +79,15 @@ export const RISK_CONFIG = {
 };
 
 // File Manager Configuration
-export const FILE_MANAGER_CONFIG = {
+/* export const FILE_MANAGER_CONFIG = {
     sourceCandleFile: '../candles/candles_1m.json',
-    targetDataDir: './data/',
+    targetDataDir: '../strategy/data/',
+    targetCandleFile: 'candles_1m.json',
+}; */
+
+export const FILE_MANAGER_CONFIG = {
+    sourceCandleFile: path.join(PROJECT_ROOT, 'candles', 'candles_1m.json'),
+    targetDataDir: path.join(PROJECT_ROOT, 'strategy', 'data'),
     targetCandleFile: 'candles_1m.json',
 };
 

@@ -6,7 +6,7 @@ import { GENERAL_CONFIG } from './configStrategy.js';
 export function calculateATR(candles, period) {
     if (!Array.isArray(candles) || candles.length < period) {
         if (GENERAL_CONFIG.debug) {
-            console.log(chalk.yellow(`[DEBUG] Candele insufficienti per ATR: ${candles.length}/${period}`));
+            console.log(chalk.blue(`[ATR.JS] Candele insufficienti per ATR: ${candles.length}/${period}`));
         }
         return 0;
     }
@@ -21,15 +21,17 @@ export function calculateATR(candles, period) {
         return Math.max(
             candle.high - candle.low,
             Math.abs(candle.high - prevCandle.close),
-            Math.abs(candle.low - prevCandle.close)
+            Math.abs(candle.low - prevCandle.close)            
         );
+        
     });
 
     // Calcola la media dei TR
     const atr = trueRanges.reduce((sum, tr) => sum + tr, 0) / period;
 
     if (GENERAL_CONFIG.debug) {
-        console.log(chalk.gray(`[DEBUG] ATR calcolato: ${atr.toFixed(2)} (periodi: ${period}) in atr.js`));
+        
+        console.log(chalk.blue(`[ATR.JS] ATR ${atr.toFixed(2)} (periodi: ${period}) Function call in atr.js`));
     }
 
     return atr;

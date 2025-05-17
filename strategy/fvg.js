@@ -5,7 +5,7 @@ import { GENERAL_CONFIG } from './configStrategy.js';
 // Stub per rilevare FVG
 export function detectFVG(candle, prevCandles) {
     if (GENERAL_CONFIG.debug) {
-        console.log(chalk.gray(`[DEBUG] Simulazione FVG per candela @ ${new Date(candle.timestamp).toISOString()}`));
+        console.log(chalk.magenta(`[FVG.JS] (TEST SIGNALS) Segnale FVG per candela @ ${new Date(candle.timestamp).toISOString()} generato in fvg.js`));
     }
 
     // Simula un FVG con probabilità del 70%
@@ -20,7 +20,8 @@ export function detectFVG(candle, prevCandles) {
             isBull,
         };
         if (GENERAL_CONFIG.debug) {
-            console.log(chalk.gray(`[DEBUG] FVG generato: ${JSON.stringify(fvg)}`));
+            // console.log(chalk.magenta(`[FVG.JS] (TEST SIGNALS) FVG generato @ ${new Date(candle.timestamp).toISOString()} ${JSON.stringify(fvg)}`));
+            console.log(chalk.magenta(`[FVG.JS] (TEST SIGNALS) FVG ${JSON.stringify(fvg)}`));
         }
         return isBull ? { bullishFVG: fvg, bearishFVG: null } : { bullishFVG: null, bearishFVG: fvg };
     }
