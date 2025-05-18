@@ -999,6 +999,8 @@ var CVDS lastCVDS = na
 
 atrCVDS = nz(ta.atr(atrLenCVDS), ta.tr(true))
 
+
+//#region Strategy
 diffPercent (float val1, float val2) =>
     (math.abs(val1 - val2) / val2) * 100.0
 
@@ -1010,7 +1012,7 @@ var orderBlock latestOB = na
 if allOrderBlocksList.size() > 0
     latestOB := allOrderBlocksList.get(0)
 
-//#region Strategy
+
 if bar_index > last_bar_index - maxDistanceToLastBar and barstate.isconfirmed
     createNewCVDS = true
     if not na(lastCVDS)

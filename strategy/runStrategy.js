@@ -37,9 +37,9 @@ async function saveTrade(trade) {
 }
 
 // Funzione per eseguire il backtest
-async function runBacktest(candles) {
+async function runBacktest(candles, cvdsList) {
     console.log(chalk.yellow(`[RUN STRATEGY] Avvio backtest con ${candles.length} candele...`));
-    const cvdsList = [];
+    
     let balance = STRATEGY.getInitialAmount();
     let trades = 0;
     let wins = 0;
@@ -86,6 +86,7 @@ async function runBacktest(candles) {
                 exitTime: new Date(lastCVDS.exitTime).toISOString(),
                 profit: profit,
                 outcome: tpAlertTick ? 'Take Profit' : 'Stop Loss',
+                newBalance: balance.toFixed(2),
             };
             await saveTrade(trade);
         }
@@ -101,19 +102,28 @@ async function runBacktest(candles) {
 
     // Report finale
     const winRate = trades > 0 ? (wins / trades * 100).toFixed(2) : 0;
-    console.log(chalk.cyan(`[RUN STRATEGY] Backtest completato.`));
+
+    console.log('');
+    console.log(chalk.yellow('*************************************************************************'));
+    console.log(chalk.yellow('***************************** BACKTEST DONE *****************************'));
+    console.log(chalk.yellow('*************************************************************************'));
+    console.log('');
+
+   
     console.log(chalk.cyan(`- Bilancio finale: ${balance.toFixed(2)}`));
     console.log(chalk.cyan(`- Trade totali: ${trades}`));
     console.log(chalk.cyan(`- Trade vincenti: ${wins}`));
     console.log(chalk.cyan(`- Win rate: ${winRate}%`));
+
+    return { balance, trades, wins };
 }
 
 // Funzione principale
 async function runStrategy() {
 
-    console.log(chalk.yellow('***************************************************************************'));
-    console.log(chalk.yellow('************************ Avvio della strategia CVD ************************'));
-    console.log(chalk.yellow('***************************************************************************'));
+    console.log(chalk.yellow('**************************************************************************'));
+    console.log(chalk.yellow('*************************** CVD BACKTEST START ***************************'));
+    console.log(chalk.yellow('**************************************************************************'));
     console.log('');
 
     // Valida la configurazione
@@ -138,15 +148,74 @@ async function runStrategy() {
     const candles = await readCandles(targetCandlePath);
     const minCandlesForBacktest = 100;
 
+    // Inizializza CDVS
+    const cvdsList = [];
+
     if (candles.length >= minCandlesForBacktest) {
-        await runBacktest(candles);
+        let { balance, trades, wins } = await runBacktest(candles, cvdsList);
+
+        // await runBacktest(candles, cvdsList);
+
+        // --- CHIUSURA TRADE APERTO PRIMA DELLA LIVE ---
+        const lastCVDS = cvdsList[0];
+        if (lastCVDS && lastCVDS.state !== 'Done' && lastCVDS.entryPrice !== null) {
+            // Forza la chiusura al prezzo di close dell'ultima candela
+            lastCVDS.exitPrice = candles[candles.length - 1].close;
+            lastCVDS.exitTime = candles[candles.length - 1].timestamp;
+            lastCVDS.state = 'Forzato Fine Backtest';
+            const profit = lastCVDS.entryType === 'Long'
+                ? (lastCVDS.exitPrice - lastCVDS.entryPrice)
+                : (lastCVDS.entryPrice - lastCVDS.exitPrice);
+            
+            // Aggiorno balance
+            balance += profit;
+
+            // Leggi il numero di trade già salvati
+            let tradesCount = 0;
+            try {
+                const tradesData = await fs.readFile(path.resolve(FILE_MANAGER_CONFIG.targetDataDir, 'trades.json'), 'utf-8');
+                const tradesArr = JSON.parse(tradesData);
+                tradesCount = tradesArr.length;
+            } catch (e) {
+                tradesCount = 0;
+            }
+
+            
+
+            const trade = {
+                tradeNumber: tradesCount + 1,
+                entryType: lastCVDS.entryType,
+                entryPrice: lastCVDS.entryPrice,
+                entryTime: new Date(lastCVDS.entryTime).toISOString(),
+                exitPrice: lastCVDS.exitPrice,
+                exitTime: new Date(lastCVDS.exitTime).toISOString(),
+                profit: profit,
+                outcome: 'Chiusura Forzata',
+                newBalance: balance.toFixed(2),
+            };
+            await saveTrade(trade);
+
+            console.log('');
+    // console.log(chalk.yellow('**************************************************************************'));
+    console.log(chalk.yellow('************************* ALL TRADES CLOSED NOW **************************'));
+    // console.log(chalk.yellow('**************************************************************************'));
+    console.log('');
+
+            console.log(chalk.yellow(`[RUN STRATEGY] ALL OPEN POSITIONS CLOSED NOW -> Final Balance ${balance.toFixed(2)}`));
+        }
     } else {
         console.log(chalk.yellow(`Candele insufficienti (${candles.length}/${minCandlesForBacktest}). Passaggio a modalità live...`));
     }
 
     // Modalità live: monitora nuove candele
+    console.log('');
+    console.log(chalk.yellow('**************************************************************************'));
+    console.log(chalk.yellow('***************************** CVD LIVE TRADE *****************************'));
+    console.log(chalk.yellow('**************************************************************************'));
+    console.log('');
+
     console.log(chalk.cyan(`Avvio modalità live su ${targetCandlePath}...`));
-    const cvdsList = [];
+    
     watch(targetCandlePath, async (eventType) => {
         if (eventType === 'change') {
             console.log(chalk.blue(`Modifica rilevata in ${targetCandlePath}. Elaborazione nuova candela...`));
@@ -169,8 +238,19 @@ async function runStrategy() {
                     const profit = lastCVDS.entryType === 'Long'
                         ? (lastCVDS.exitPrice - lastCVDS.entryPrice)
                         : (lastCVDS.entryPrice - lastCVDS.exitPrice);
+
+                    // Leggi il numero di trade già salvati
+                    let tradesCount = 0;
+                    try {
+                        const tradesData = await fs.readFile(path.resolve(FILE_MANAGER_CONFIG.targetDataDir, 'trades.json'), 'utf-8');
+                        const tradesArr = JSON.parse(tradesData);
+                        tradesCount = tradesArr.length;
+                    } catch (e) {
+                        tradesCount = 0;
+                    }
+
                     const trade = {
-                        tradeNumber: trades + 1,
+                        tradeNumber: tradesCount + 1,
                         entryType: lastCVDS.entryType,
                         entryPrice: lastCVDS.entryPrice,
                         entryTime: new Date(lastCVDS.entryTime).toISOString(),

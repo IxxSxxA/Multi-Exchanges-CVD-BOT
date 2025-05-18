@@ -42,16 +42,26 @@ function logCandle(candle) {
         chalk.red(` vSell: ${candle.vSell.toFixed(2)}`)
         
     );
+
+    
 }
 
 // Funzione per Segnale CVD
-function getCVDSignalsWrapper(candle, prevCandles) {
+function getCVDSignalsWrapper(candle, prevCandles, context = "init") {
     const signals = getCVDSignals(candle, prevCandles);
     if (GENERAL_CONFIG.debug) {
         if (signals.isBullishSignal) {
-            console.log(chalk.green('[STRATEGY] Segnale CVD Ricevuto -> BULL'));
+            if (context === "init") {
+                console.log(chalk.greenBright(`[STRATEGY] [CVD CHECK] CVD BULL Detected @ ${new Date(candle.timestamp).toISOString()} [NEW SIGNAL]. Waiting For FVG`));
+            } else if (context === "abort-check") {
+                console.log(chalk.yellow(`[STRATEGY] [CVD CHECK] CVD BULL Detected @ ${new Date(candle.timestamp).toISOString()} [ABORT CHECK].`));
+            }
         } else if (signals.isBearishSignal) {
-            console.log(chalk.redBright('[STRATEGY] Segnale CVD Ricevuto -> BEAR'));
+            if (context === "init") {
+                console.log(chalk.redBright(`[STRATEGY] [CVD CHECK] CVD BEAR Detected @ ${new Date(candle.timestamp).toISOString()} [NEW SIGNAL]. Waiting For FVG`));
+            } else if (context === "abort-check") {
+                console.log(chalk.yellow(`[STRATEGY] [CVD CHECK] CVD BEAR Detected @ ${new Date(candle.timestamp).toISOString()} [ABORT CHECK].`));
+            }
         }
     }
     return signals;
@@ -62,18 +72,21 @@ function detectFVGWrapper(candle, prevCandles) {
     const fvg = detectFVG(candle, prevCandles);
     if (GENERAL_CONFIG.debug && (fvg.bullishFVG || fvg.bearishFVG)) {
         // Calcola ATR atrLen da config per filtrare FVG
-        const atrShort = calculateATR(prevCandles, CVD_CONFIG.atrLen);
-        console.log(chalk.greenBright(`[STRATEGY] ATR ${atrShort.toFixed(2)} (periodi: ${CVD_CONFIG.atrLen}) Function in strategyLogic.js -> atrLen`));
-        const fvgSize = fvg.bullishFVG ? (fvg.bullishFVG.max - fvg.bullishFVG.min) : (fvg.bearishFVG ? (fvg.bearishFVG.max - fvg.bearishFVG.min) : 0);
+        let atrShort = calculateATR(prevCandles, CVD_CONFIG.atrLen);
+        console.log(chalk.greenBright(`[STRATEGY] ATR ${atrShort.toFixed(2)} -> atrLen for ATR ${CVD_CONFIG.atrLen}`));
+        
+        let fvgSize = fvg.bullishFVG ? (fvg.bullishFVG.max - fvg.bullishFVG.min) : (fvg.bearishFVG ? (fvg.bearishFVG.max - fvg.bearishFVG.min) : 0);
+        console.log(chalk.greenBright(`[STRATEGY] FVG ${fvgSize.toFixed(2)} -> FVG Size MAX - MIN`));
+
         if (fvgSize < atrShort) {
-            console.log(chalk.redBright(`[STRATEGY] [ALERT] FVG scartato: dimensione ${fvgSize.toFixed(2)} < ATR atrLen ${atrShort.toFixed(2)}`));
+            console.log(chalk.redBright(`[STRATEGY] [ALERT] FVG Cancelled -> fvgSize ${fvgSize.toFixed(2)} < ATR atrLen ${atrShort.toFixed(2)}`));
             return { bullishFVG: null, bearishFVG: null };
         }
         // console.log(chalk.greenBright(`[STRATEGY] Segnale FVG Ricevuto -> ${JSON.stringify(fvg)}`));
         if (fvg.bullishFVG) {
-            console.log(chalk.green('[STRATEGY] Segnale FVG Ricevuto -> BULL'));
+            console.log(chalk.green('[STRATEGY] FVG Signal -> BULL'));
         } else if (fvg.bearishFVG) {
-            console.log(chalk.red('[STRATEGY] Segnale FVG Ricevuto -> BEAR'));
+            console.log(chalk.red('[STRATEGY] FVG Signal -> BEAR'));
         }
     }
     return fvg;
@@ -114,6 +127,8 @@ export function executeStrategy(candle, prevCandles, cvdsList = []) {
         
     }
 
+    
+
     let lastCVDS = cvdsList.length > 0 ? cvdsList[0] : null;
     let buyAlertTick = false;
     let sellAlertTick = false;
@@ -125,15 +140,20 @@ export function executeStrategy(candle, prevCandles, cvdsList = []) {
     
     
     if (createNewCVDS) {
+        if (lastCVDS && lastCVDS.state === 'Aborted') {
+            console.log(chalk.magenta(`[STRATEGY] [STATE] Last Signal Aborted -> Last Signal set to Waiting For CVDS @ ${new Date(candle.timestamp).toISOString()}`));
+        }
         lastCVDS = new CVDS();
         lastCVDS.startTime = candle.timestamp;
         cvdsList.unshift(lastCVDS);
-        console.log(chalk.cyan(`[STRATEGY] Waiting For CVDS @ ${new Date(candle.timestamp).toISOString()}`));
+        console.log(chalk.cyan(`[STRATEGY] [STATE] Waiting for CVDS @ ${new Date(candle.timestamp).toISOString()}`));
     }
+
+    // console.log(chalk.cyan(`[STRATEGY] [STATE] Last Signal -> ${lastCVDS.state}`));
 
     // Macchina a stadi
     if (lastCVDS.state === 'Waiting For CVDS') {
-        const { isBullishSignal, isBearishSignal } = getCVDSignalsWrapper(candle, prevCandles);
+        const { isBullishSignal, isBearishSignal } = getCVDSignalsWrapper(candle, prevCandles, "init");
         if (isBullishSignal || isBearishSignal) {
             lastCVDS.cvdsTime = candle.timestamp;
             lastCVDS.cvdsClose = candle.close;
@@ -141,34 +161,49 @@ export function executeStrategy(candle, prevCandles, cvdsList = []) {
             if (isBullishSignal) {
                 lastCVDS.overlapDirection = 'Bull';
                 lastCVDS.state = 'Waiting For FVG';
-                console.log(chalk.blue(`[STRATEGY] Bullish CVD Signal Received @ ${new Date(candle.timestamp).toISOString()}. Waiting For FVG...`));
-            } else if (isBearishSignal) {
-                lastCVDS.overlapDirection = 'Bear';
-                lastCVDS.state = 'Waiting For FVG';
-                console.log(chalk.blue(`[STRATEGY] Bearish CVD Signal Received @ ${new Date(candle.timestamp).toISOString()}. Waiting For FVG...`));
-            }
+                // console.log(chalk.blue(`[STRATEGY] Bullish CVD Signal Received @ ${new Date(candle.timestamp).toISOString()}. Waiting For FVG...`));
+            } /* else {
+                console.log(chalk.yellow('[STRATEGY] No Bullish or Bearish FVG -> New CVD check for ABORT CVDS (Segnale Opposto?)'));
+
+                let { isBullishSignal, isBearishSignal } = getCVDSignalsWrapper(candle, prevCandles);
+                    if ((lastCVDS.overlapDirection === 'Bull' && isBearishSignal) || (lastCVDS.overlapDirection === 'Bear' && isBullishSignal)) {
+                    lastCVDS.state = 'Aborted';
+                    console.log(chalk.redBright(`[STRATEGY] [ALERT] Trend Changed -> CVDS Aborted @ ${new Date(candle.timestamp).toISOString()}`));
+                }
+            } */
         }
     }
 
     if (lastCVDS.state === 'Waiting For FVG') {
-        const { bullishFVG, bearishFVG } = detectFVGWrapper(candle, prevCandles);
+        let { bullishFVG, bearishFVG } = detectFVGWrapper(candle, prevCandles);
         if (lastCVDS.overlapDirection === 'Bull' && bullishFVG) {
             lastCVDS.fvg = bullishFVG;
             lastCVDS.state = 'Enter Position';
-            console.log(chalk.green(`[STRATEGY] Bullish CVD & FVG rilevato @ ${new Date(candle.timestamp).toISOString()}. Preparazione ingresso...`));
+            console.log(chalk.green(`[STRATEGY] Bullish CVD & FVG Detected @ ${new Date(candle.timestamp).toISOString()}. Preparazione ingresso...`));
         } else if (lastCVDS.overlapDirection === 'Bear' && bearishFVG) {
             lastCVDS.fvg = bearishFVG;
             lastCVDS.state = 'Enter Position';
-            console.log(chalk.green(`[STRATEGY] Bearish CVD & FVG rilevato @ ${new Date(candle.timestamp).toISOString()}. Preparazione ingresso...`));
-        } else {
+            console.log(chalk.green(`[STRATEGY] Bearish CVD & FVG Detected @ ${new Date(candle.timestamp).toISOString()}. Preparazione ingresso...`));
+        } /* else {
             console.log(chalk.yellow('[STRATEGY] No Bullish or Bearish FVG -> New CVD check for ABORT CVDS (Segnale Opposto?)'));
 
-            const { isBullishSignal, isBearishSignal } = getCVDSignalsWrapper(candle, prevCandles);
+            let { isBullishSignal, isBearishSignal } = getCVDSignalsWrapper(candle, prevCandles);
             if ((lastCVDS.overlapDirection === 'Bull' && isBearishSignal) || (lastCVDS.overlapDirection === 'Bear' && isBullishSignal)) {
                 lastCVDS.state = 'Aborted';
-                console.log(chalk.redBright(`[STRATEGY] [ALERT] Segnale opposto rilevato. CVDS abortito @ ${new Date(candle.timestamp).toISOString()}`));
+                console.log(chalk.redBright(`[STRATEGY] [ALERT] Trend Changed -> CVDS Aborted @ ${new Date(candle.timestamp).toISOString()}`));
                 
             }
+        } */
+    }
+
+    // --- NUOVO BLOCCO: controllo segnale opposto SOLO se ancora in Waiting For FVG ---
+    // Se siamo ancora in "Waiting For FVG", controlla se il segnale è cambiato
+    if (lastCVDS.state === 'Waiting For FVG') {
+        const { isBullishSignal, isBearishSignal } = getCVDSignalsWrapper(candle, prevCandles, "abort-check");
+        if ((lastCVDS.overlapDirection === 'Bull' && isBearishSignal) ||
+            (lastCVDS.overlapDirection === 'Bear' && isBullishSignal)) {
+            lastCVDS.state = 'Aborted';
+            console.log(chalk.redBright(`[STRATEGY] [ALERT] Trend Changed -> CVDS Aborted @ ${new Date(candle.timestamp).toISOString()}`));
         }
     }
 
@@ -179,7 +214,7 @@ export function executeStrategy(candle, prevCandles, cvdsList = []) {
         lastCVDS.entryType = lastCVDS.overlapDirection === 'Bull' ? 'Long' : 'Short';
 
         // Calcola ATR per TP/SL
-        const atrCVDS = calculateATRWrapper(prevCandles, CVD_CONFIG.atrLenCVDS);
+        let atrCVDS = calculateATRWrapper(prevCandles, CVD_CONFIG.atrLenCVDS);
         // Test: Calcola ATR con la funzione di verifica
 /*         if (GENERAL_CONFIG.debug) {
             const atrTest = calculateATR(prevCandles, CVD_CONFIG.atrLenCVDS);
@@ -189,7 +224,7 @@ export function executeStrategy(candle, prevCandles, cvdsList = []) {
             console.log(chalk.gray(`[STRATEGY] ATR atrLen ${atrOther.toFixed(2)} (periodi: ${CVD_CONFIG.atrLen}) Function call in strategyLogic.js`));
         } */
 
-        const { slTarget, tpTarget } = calculateTPSL(lastCVDS.entryPrice, atrCVDS, lastCVDS.entryType === 'Long');
+        let { slTarget, tpTarget } = calculateTPSL(lastCVDS.entryPrice, atrCVDS, lastCVDS.entryType === 'Long');
 
         lastCVDS.slTarget = slTarget;
         lastCVDS.tpTarget = tpTarget;
@@ -212,14 +247,14 @@ export function executeStrategy(candle, prevCandles, cvdsList = []) {
                 lastCVDS.exitTime = candle.timestamp;
                 lastCVDS.state = 'Take Profit';
                 lastCVDS.fvgEndTime = lastCVDS.fvgEndTime || candle.timestamp;
-                console.log(chalk.blueBright(`[STRATEGY] Take Profit Long raggiunto @ ${lastCVDS.exitPrice}`));
+                // console.log(chalk.blueBright(`[STRATEGY] Take Profit Long raggiunto @ ${lastCVDS.exitPrice}`));
             } else if (candle.low <= lastCVDS.slTarget) {
                 slAlertTick = true;
                 lastCVDS.exitPrice = lastCVDS.slTarget;
                 lastCVDS.exitTime = candle.timestamp;
                 lastCVDS.state = 'Stop Loss';
                 lastCVDS.fvgEndTime = lastCVDS.fvgEndTime || candle.timestamp;
-                console.log(chalk.redBright(`[STRATEGY] Stop Loss Long raggiunto @ ${lastCVDS.exitPrice}`));
+                // console.log(chalk.redBright(`[STRATEGY] Stop Loss Long raggiunto @ ${lastCVDS.exitPrice}`));
             }
         } else {
             if (candle.low <= lastCVDS.tpTarget) {
@@ -272,11 +307,11 @@ export function executeStrategy(candle, prevCandles, cvdsList = []) {
     if (GENERAL_CONFIG.debug) {
 
         if (lastCVDS.state === 'Entry Taken') {
-            console.log(chalk.yellow(`[STRATEGY] ${new Date(candle.timestamp).toISOString()} Stato CVDS Aggiornato -> ${JSON.stringify(lastCVDS.state)} Waiting for TP/SL`));
+            console.log(chalk.yellow(`[STRATEGY] [STATE] ${new Date(candle.timestamp).toISOString()} Stato CVDS Aggiornato -> ${JSON.stringify(lastCVDS.state)} Waiting for TP/SL`));
         }
 
         else if (lastCVDS.state != 'Entry Taken') {
-            console.log(chalk.yellow(`[STRATEGY] ${new Date(candle.timestamp).toISOString()} Stato CVDS Aggiornato -> ${JSON.stringify(lastCVDS.state)}`));
+            console.log(chalk.yellow(`[STRATEGY] [STATE] ${new Date(candle.timestamp).toISOString()} Stato CVDS Aggiornato -> ${JSON.stringify(lastCVDS.state)}`));
              
         }
     

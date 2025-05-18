@@ -31,7 +31,7 @@ export function calculateATR(candles, period) {
 
     if (GENERAL_CONFIG.debug) {
         
-        console.log(chalk.blue(`[ATR.JS] ATR ${atr.toFixed(2)} (periodi: ${period}) Function call in atr.js`));
+        console.log(chalk.blue(`[ATR.JS] ATR ${atr.toFixed(2)} Periods ${period}`));
     }
 
     return atr;

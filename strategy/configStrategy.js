@@ -9,7 +9,7 @@ const PROJECT_ROOT = path.resolve(__dirname, '..'); // root del progetto
 
 // Strategy Configuration
 export const STRATEGY = {
-    chartTF: "3", // Timeframe del grafico in minuti (es. "3" per 3m)
+    chartTF: "1", // Timeframe del grafico in minuti (es. "3" per 3m)
     anchorPeriod: "5", // Timeframe per Volume Delta in minuti
     initialAmount: "10000", // Capitale iniziale per il backtest
     getChartTF: () => parseInt(STRATEGY.chartTF),
@@ -61,6 +61,7 @@ export const CVD_CONFIG = {
     atrLen: 10,         // Periodo ATR per FVG
     atrLenCVDS: 50,     // Periodo ATR per TP/SL
     dynamicRR: 0.57,    // Rapporto rischio/rendimento dinamico
+    signalType: "Raw", // Tipo di segnale ("Advanced" o "Raw")
 };
 
 // Risk Management Configuration
@@ -96,10 +97,10 @@ export const validateConfig = () => {
     const errors = [];
 
     // Validazione timeframes
-    if (STRATEGY.getChartTF() <= GENERAL_CONFIG.getLowerTimeframe()) {
+    if (STRATEGY.getChartTF() < GENERAL_CONFIG.getLowerTimeframe()) {
         errors.push('chartTF deve essere maggiore di lowerTimeframe');
     }
-    if (STRATEGY.getAnchorPeriod() <= STRATEGY.getChartTF()) {
+    if (STRATEGY.getAnchorPeriod() < STRATEGY.getChartTF()) {
         errors.push('anchorPeriod deve essere maggiore di chartTF');
     }
 

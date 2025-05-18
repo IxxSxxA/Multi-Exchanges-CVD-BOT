@@ -58,6 +58,12 @@ export async function initializeFileManager() {
     // Crea la cartella di destinazione
     await ensureDirectory(targetDir);
 
+    // Cancella tutti i file nella cartella targetDir
+    const files = await fs.readdir(targetDir);
+    for (const file of files) {
+        await fs.rm(path.join(targetDir, file), { recursive: true, force: true });
+    }
+
     // Copia iniziale del file
     await copyCandleFile();
 
