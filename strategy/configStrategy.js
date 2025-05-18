@@ -10,7 +10,7 @@ const PROJECT_ROOT = path.resolve(__dirname, '..'); // root del progetto
 // Strategy Configuration
 export const STRATEGY = {
     chartTF: "1", // Timeframe del grafico in minuti (es. "3" per 3m)
-    anchorPeriod: "5", // Timeframe per Volume Delta in minuti
+    anchorPeriod: "3", // Timeframe per Volume Delta in minuti
     initialAmount: "10000", // Capitale iniziale per il backtest
     getChartTF: () => parseInt(STRATEGY.chartTF),
     getAnchorPeriod: () => parseInt(STRATEGY.anchorPeriod),
@@ -32,7 +32,7 @@ export const GENERAL_CONFIG = {
 // FVG Configuration
 export const FVG_CONFIG = {
     enabled: true,
-    sensitivity: "Normal", // "All", "Extreme", "High", "Normal", "Low"
+    sensitivity: "Extreme", // "All", "Extreme", "High", "Normal", "Low"
     showLastXFVGs: 2, // Numero di FVG da mantenere in memoria
     minimumFVGSize: 2, // Dimensione minima del FVG (in barre)
     overlapThresholdPercentage: 0, // Percentuale di sovrapposizione per combinare FVG
