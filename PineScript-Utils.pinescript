@@ -1,0 +1,37 @@
+//@version=5
+indicator("`timeframe_in_seconds()`")
+
+// Get a user-selected timeframe.
+tfInput = input.timeframe("1D")
+
+// Convert it into an "int" number of seconds.
+secondsInTf = timeframe.in_seconds(tfInput)
+
+plot(secondsInTf)
+
+
+
+//@version=5
+indicator("ta.atr")
+plot(ta.atr(14))
+
+//the same on pine
+pine_atr(length) =>
+    trueRange = na(high[1])? high-low : math.max(math.max(high - low, math.abs(high - close[1])), math.abs(low - close[1]))
+    //true range can be also calculated with ta.tr(true)
+    ta.rma(trueRange, length)
+
+plot(pine_atr(14))
+
+
+
+//@version=5
+indicator("ta.rma")
+plot(ta.rma(close, 15))
+
+//the same on pine
+pine_rma(src, length) =>
+    alpha = 1/length
+    sum = 0.0
+    sum := na(sum[1]) ? ta.sma(src, length) : alpha * src + (1 - alpha) * nz(sum[1])
+plot(pine_rma(close, 15))
