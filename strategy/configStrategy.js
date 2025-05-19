@@ -9,8 +9,8 @@ const PROJECT_ROOT = path.resolve(__dirname, '..'); // root del progetto
 
 // Strategy Configuration
 export const STRATEGY = {
-    chartTF: "1", // Timeframe del grafico in minuti (es. "3" per 3m)
-    anchorPeriod: "3", // Timeframe per Volume Delta in minuti
+    chartTF: "5", // Timeframe del grafico in minuti (es. "3" per 3m)
+    anchorPeriod: "15", // Timeframe per Volume Delta in minuti
     initialAmount: "10000", // Capitale iniziale per il backtest
     getChartTF: () => parseInt(STRATEGY.chartTF),
     getAnchorPeriod: () => parseInt(STRATEGY.anchorPeriod),
