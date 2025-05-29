@@ -13,7 +13,7 @@ A JavaScript-based trading bot that aggregates live market data from multiple cr
 
 1) main.js -> Folder src/ contains the main program. It connects to multiple exchanges (found in exchanges/) to retrieve live data via websoket. Aggregated candles are stored in candles/candles_1m.json and in candles/current_candle.json
 
-Saved candle structure example:
+Saved candles in /candles/candles_1m.json structure example:
 
 {
     "open": 96704.5,
